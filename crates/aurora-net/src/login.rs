@@ -10,7 +10,11 @@ use uuid::Uuid;
 pub const SL_MAIN_GRID: &str = "https://login.agni.lindenlab.com/cgi-bin/login.cgi";
 pub const SL_BETA_GRID: &str = "https://login.aditi.lindenlab.com/cgi-bin/login.cgi";
 
-pub const CHANNEL: &str = "Aurora Viewer";
+/// The channel sent at login, with currency quotes and in the viewer's
+/// statistics. Savage Viewer's own, not upstream's "Aurora Viewer": the
+/// Policy on Third-Party Viewers wants one identifier per viewer, never
+/// shared with another one.
+pub const CHANNEL: &str = "Savage Viewer";
 
 #[derive(Debug, Clone)]
 pub enum StartLocation {
@@ -506,6 +510,12 @@ pub async fn login(http: &reqwest::Client, req: &LoginRequest) -> Result<LoginRe
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_channel_is_this_viewers_own() {
+        assert_eq!(CHANNEL, "Savage Viewer");
+        assert_ne!(CHANNEL, "Aurora Viewer");
+    }
 
     #[test]
     fn username_split() {

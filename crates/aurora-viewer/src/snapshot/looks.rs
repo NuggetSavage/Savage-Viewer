@@ -386,24 +386,55 @@ pub enum Live {
 /// keeps its own view as it always was; closed, the world takes the looks
 /// when `always` is on and the world is shown (`in_world`: not the login
 /// screen nor the loading one).
-pub fn live(panel_open: bool, always: bool, in_world: bool) -> Option<Live> {
+///
+/// `env_locked`: RLVa holds the environment (@setenv). The world then goes
+/// without its looks: one that brightens or equalises the image would
+/// partly undo a forced dark sky for as long as it stays on. Stricter than
+/// upstream, whose looks only show while the photo window is open.
+pub fn live(panel_open: bool, always: bool, in_world: bool, env_locked: bool) -> Option<Live> {
     if panel_open {
         Some(Live::Photo)
-    } else if always && in_world {
+    } else if always && in_world && !env_locked {
         Some(Live::World)
     } else {
         None
     }
 }
 
-/// The world's look laid over the whole `window` (pixels), as a photo of
-/// the window's size drawn at its scale; a window without a size (it is
-/// minimised) still gives a photo of one pixel.
-pub fn world_placement(window: (u32, u32)) -> Placement {
+/// Pixels the world is drawn on per pixel of the window, as the renderer
+/// sizes its images (`Renderer::make_targets_now`): RLVa's reduced
+/// resolution first (`divisor` above 1, the paused scene's too), then
+/// FSR, whose output has the window's size, then the render scale
+/// (`render_percent`, kept between 50 and 100).
+pub fn drawn_scale(fsr: bool, divisor: u32, render_percent: u32) -> f32 {
+    if divisor > 1 {
+        1.0 / divisor as f32
+    } else if fsr {
+        1.0
+    } else {
+        render_percent.clamp(50, 100) as f32 / 100.0
+    }
+}
+
+/// The world's look laid over the whole `window` (pixels), as a photo that
+/// fills it.
+///
+/// `density`: pixels of the photo per pixel of the window (2 for a 4K
+/// photo seen in a 1080p window), so that what is sized in the photo's
+/// pixels (a blur, a grain, scan lines) is on screen what it is on the
+/// photo taken; anything that is no number of pixels counts as 1.
+/// `drawn`: pixels the world is drawn on per pixel of the window
+/// (`drawn_scale`): the look's passes run on that image, and a vignette
+/// or a bar placed for the window's size would otherwise sit off centre.
+/// A window without a size (it is minimised) still gives a photo of one
+/// pixel.
+pub fn world_placement(window: (u32, u32), drawn: f32, density: f32) -> Placement {
+    let density = if density.is_finite() && density > 0.0 { density } else { 1.0 };
+    let side = |pixels: u32| ((pixels as f32 * density).round() as u32).max(1);
     Placement {
         origin: [0.0, 0.0],
-        photo: (window.0.max(1), window.1.max(1)),
-        scale: 1.0,
+        photo: (side(window.0), side(window.1)),
+        scale: drawn / density,
     }
 }
 
@@ -447,23 +478,30 @@ mod tests {
 
     #[test]
     fn the_photo_window_wins_over_the_world_look() {
-        assert_eq!(live(true, false, true), Some(Live::Photo));
-        assert_eq!(live(true, true, true), Some(Live::Photo));
+        assert_eq!(live(true, false, true, false), Some(Live::Photo));
+        assert_eq!(live(true, true, true, false), Some(Live::Photo));
         // the photo window's live view is the same before login (the
         // offline demo, the login screen)
-        assert_eq!(live(true, true, false), Some(Live::Photo));
+        assert_eq!(live(true, true, false, false), Some(Live::Photo));
     }
 
     #[test]
     fn the_world_look_needs_the_switch_and_the_world() {
-        assert_eq!(live(false, true, true), Some(Live::World));
-        assert_eq!(live(false, false, true), None);
-        assert_eq!(live(false, true, false), None);
+        assert_eq!(live(false, true, true, false), Some(Live::World));
+        assert_eq!(live(false, false, true, false), None);
+        assert_eq!(live(false, true, false, false), None);
+    }
+
+    #[test]
+    fn the_world_look_waits_while_rlva_locks_the_environment() {
+        assert_eq!(live(false, true, true, true), None);
+        // the photo window keeps its live view, as upstream
+        assert_eq!(live(true, true, true, true), Some(Live::Photo));
     }
 
     #[test]
     fn the_world_look_covers_the_window() {
-        let place = world_placement((1920, 1080));
+        let place = world_placement((1920, 1080), 1.0, 1.0);
         assert_eq!(
             place,
             Placement {
@@ -473,7 +511,35 @@ mod tests {
             }
         );
         // a minimised window has no size: never a photo of zero pixels
-        assert_eq!(world_placement((0, 0)).photo, (1, 1));
+        assert_eq!(world_placement((0, 0), 1.0, 1.0).photo, (1, 1));
+    }
+
+    #[test]
+    fn the_world_look_follows_the_size_the_world_is_drawn_at() {
+        // the 3D at half the window: the same image, on half the pixels
+        let place = world_placement((1920, 1080), 0.5, 1.0);
+        assert_eq!(place.photo, (1920, 1080));
+        assert_eq!(place.scale, 0.5);
+        assert_eq!(drawn_scale(false, 1, 50), 0.5);
+        assert_eq!(drawn_scale(false, 1, 100), 1.0);
+        // the setting is kept between 50 and 100
+        assert_eq!(drawn_scale(false, 1, 10), 0.5);
+        // FSR draws its output at the window's size
+        assert_eq!(drawn_scale(true, 1, 50), 1.0);
+        // RLVa's reduced resolution comes before both
+        assert_eq!(drawn_scale(true, 4, 100), 0.25);
+    }
+
+    #[test]
+    fn the_world_look_works_in_the_photos_pixels() {
+        // a 4K photo seen in a 1080p window: two photo pixels per pixel
+        // of the window, so a blur is on screen what it is on the photo
+        let place = world_placement((1920, 1080), 1.0, 2.0);
+        assert_eq!(place.photo, (3840, 2160));
+        assert_eq!(place.scale, 0.5);
+        // a density that is no number of pixels: the window's own
+        assert_eq!(world_placement((1920, 1080), 1.0, 0.0).photo, (1920, 1080));
+        assert_eq!(world_placement((1920, 1080), 1.0, f32::NAN).photo, (1920, 1080));
     }
 
     #[test]

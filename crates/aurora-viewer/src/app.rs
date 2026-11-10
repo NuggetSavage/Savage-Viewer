@@ -10697,7 +10697,7 @@ impl App {
         self.snapshots.look_focus = focus;
         fp.look = match &photo {
             Some(f) => f.look.clone(),
-            None => self.live_look((w, h), focus),
+            None => self.live_look((w, h), fp.rlva_resolution_divisor, focus),
         };
         self.scene.parts.lap(Part::ParamsProbes, t_part);
 

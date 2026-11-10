@@ -1179,17 +1179,32 @@ impl App {
     /// The window closed, the world keeps the looks over the whole
     /// `window` when "Keep on in the world" is on (`looks::live`), in the
     /// world only: the login and loading screens stay as they are.
-    pub(super) fn live_look(&mut self, window: (u32, u32), focus: Option<f32>) -> Option<aurora_render::looks::PhotoLook> {
+    /// `divisor`: the frame's reduced resolution (RLVa's, the paused
+    /// scene's), which sizes the image the looks are drawn on.
+    pub(super) fn live_look(&mut self, window: (u32, u32), divisor: u32, focus: Option<f32>) -> Option<aurora_render::looks::PhotoLook> {
         let world = matches!(self.screen, Screen::World);
-        match looks::live(self.panels.snapshot, self.settings.snapshot.looks_always, world)? {
+        let always = self.settings.snapshot.looks_always;
+        match looks::live(self.panels.snapshot, always, world, self.world.eep.rlva_locked)? {
             looks::Live::Photo => {}
             looks::Live::World => {
+                if self.settings.snapshot.looks.is_empty() {
+                    return None;
+                }
                 // the looks as they are kept (none pointed at: the list is
-                // closed), over the whole window
+                // closed), over the whole window, in the pixels of the
+                // photo that would be taken now
                 let stack = self.settings.snapshot.looks.clone();
                 let settings = self.settings.snapshot.look_settings.clone();
                 let layers = looks::resolve_stack(&stack, &settings, self.photo_luts());
-                return looks::frame_look(&layers, looks::world_placement(window), None, false, focus);
+                let photo = self.photo_size(window);
+                let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(window.0 as f32, window.1 as f32));
+                let frame = crate::ui::snapshot::fit(screen, photo.0 as f32 / photo.1.max(1) as f32);
+                let density = photo.1 as f32 / frame.height();
+                // (7: FSR, `Settings::render`)
+                let fsr = self.settings.antialiasing == 7;
+                let drawn = looks::drawn_scale(fsr, divisor, self.settings.render_scale_percent);
+                let place = looks::world_placement(window, drawn, density);
+                return looks::frame_look(&layers, place, None, false, focus);
             }
         }
         let ui = &self.snapshots.ui.looks;

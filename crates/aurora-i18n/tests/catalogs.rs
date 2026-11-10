@@ -253,16 +253,41 @@ fn written(source: &str) -> Vec<(String, String)> {
 }
 
 /// Savage Viewer's own. The messages that still name upstream on purpose:
-/// its team's name tag (it marks upstream's developers in the world) and
-/// the About line that credits it, which the licence asks to keep.
+/// its team's name tag (it marks upstream's developers in the world), the
+/// About line that credits it, which the licence asks to keep, and the
+/// texts that send the user to things really named so: the inventory
+/// folders `#Aurora` and `Aurora Library`, the Blender add-on and its
+/// panel, the bundled 3D model.
 fn names_upstream_on_purpose(key: &str) -> bool {
-    ["nameplate-aurora-staff", "nameplate-aurora-staff-tooltip", "about-third-party-viewer"].contains(&key)
+    [
+        "nameplate-aurora-staff",
+        "nameplate-aurora-staff-tooltip",
+        "about-third-party-viewer",
+        "ao-bootstrap-interrupted",
+        "texture-library-content-hint",
+        "picker-aurora-tab",
+        "picker-empty-library",
+        "blender-live-instructions",
+        "blender-live-bundled-version",
+        "blender-shape-connect",
+        "import-preview-aurora",
+    ]
+    .contains(&key)
 }
 
-/// The upstream name where it is not a label: a link, a file or folder
-/// path (the inventory folder `#Aurora/…`, `aurora.log`).
-fn is_a_path_or_link(word: &str) -> bool {
-    word.contains('/') || word.contains('\\') || word.contains("://")
+/// `text` without the real names that hold "Aurora": the inventory folder
+/// and its library, the demo region inside a link.
+fn without_real_names(text: &str) -> String {
+    [
+        "#Aurora/Aurora Library",
+        "#Aurora/Aurora AO",
+        "#Aurora/Aurora ＡＯ",
+        "#Aurora",
+        "Aurora%20Demo",
+        "Aurora%20D%C3%A9mo",
+    ]
+    .iter()
+    .fold(text.to_owned(), |text, name| text.replace(name, ""))
 }
 
 #[test]
@@ -278,8 +303,10 @@ fn the_viewer_is_named_savage_viewer() {
             if names_upstream_on_purpose(key) {
                 continue;
             }
-            let named = text.split_whitespace().any(|word| word.contains("Aurora") && !is_a_path_or_link(word));
-            assert!(!named, "{language}: {key} still names upstream: {text}");
+            assert!(
+                !without_real_names(text).contains("Aurora"),
+                "{language}: {key} still names upstream: {text}"
+            );
         }
         let value = |key: &str| {
             let found = messages.iter().find(|(k, _)| k == key);

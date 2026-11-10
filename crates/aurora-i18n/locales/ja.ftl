@@ -430,7 +430,7 @@ import-preview-reset-view = ビューをリセット
 import-preview-model = プレビューモデル
 import-preview-sphere = 球体（スフィア）
 import-preview-cube = 立方体（キューブ）
-import-preview-aurora = Savage 3D
+import-preview-aurora = Aurora 3D
 import-no-map = なし
 keybinds-import-files = アップロードウィンドウを開く
 keybinds-hide-interface = インターフェースの表示／非表示
@@ -1933,7 +1933,7 @@ demo-region-notecard-rules = 不動産のルール
 demo-region-notecard-welcome = ウェルカムノートカード
 demo-region-notecard-rules-text = Savageデモ不動産のルール：建築は整然と、スクリプトは軽く、近隣の人には親切に。
 demo-region-notecard-welcome-text = Savageデモ不動産へようこそ！広場はどなたでも利用できます。区画は週単位で貸し出しています。
-demo-land-welcome-to-the-aurora-demo-estate-by-buying-land = { "Savage Demo 不動産へようこそ。\u000A\u000Aこの不動産の土地を購入することで、以下のルールに同意したものとみなされます：\u000A\u000A1. 建築物は不動産の北欧風テーマに合わせてください。\u000A2. 隣接する区画から見える広告看板は禁止です。\u000A3. 環境音（ラジオ、サウンドスクリプト）は自分の区画内に収めてください。\u000A4. 90日間使用されていない区画は回収される場合があります。\u000A\u000AAuroraの広場を誰にとっても居心地のよい場所に保つためのご協力に感謝します。" }
+demo-land-welcome-to-the-aurora-demo-estate-by-buying-land = { "Savage Demo 不動産へようこそ。\u000A\u000Aこの不動産の土地を購入することで、以下のルールに同意したものとみなされます：\u000A\u000A1. 建築物は不動産の北欧風テーマに合わせてください。\u000A2. 隣接する区画から見える広告看板は禁止です。\u000A3. 環境音（ラジオ、サウンドスクリプト）は自分の区画内に収めてください。\u000A4. 90日間使用されていない区画は回収される場合があります。\u000A\u000ASavageの広場を誰にとっても居心地のよい場所に保つためのご協力に感謝します。" }
 app-welcome-2 = { "ようこそ、" }{ $value0 }{ "" }{ $value1 }{ "さん。" }
 build-ui-object-bevel = 面取り
 ui-minimap-blue = 青
@@ -5791,7 +5791,7 @@ ui-options-graphics-card-automatic = 自動
 ui-options-graphics-card-help = 自動では専用カードが優先されます。次回の起動時に適用されます。
 ui-options-graphics-card-in-use = 使用中：{ $name }
 ui-options-graphics-card-choice = 使用するカード
-ui-options-graphics-card-no-discrete = ビューアから見えるのは内蔵グラフィックスのみです。NVIDIAのカードを搭載したＰＣでは、NVIDIAコントロールパネルで aurora-viewer.exe の「優先するグラフィックスプロセッサ」をNVＩＤIAのカードに設定し、それでも表示されない場合はＰＣを再起動してください。
+ui-options-graphics-card-no-discrete = ビューアから見えるのは内蔵グラフィックスのみです。NVIDIAのカードを搭載したＰＣでは、NVIDIAコントロールパネルで savage-viewer.exe の「優先するグラフィックスプロセッサ」をNVＩＤIAのカードに設定し、それでも表示されない場合はＰＣを再起動してください。
 ui-options-graphics-card-cannot-present = 専用カードではビューアのウィンドウを描画できません：モニターをマザーボードではなく専用カードの出力端子に接続してください。
 ui-options-overlays = オーバーレイ
 ui-options-allow-overlays = 他のプログラムのオーバーレイを許可
@@ -7822,8 +7822,8 @@ hud-move-locked = クイック移動をロック
 hud-local-scale-reset = １００％にリセット
 hud-local-scale-forget = 保存したサイズを消去
 hud-local-scale-help = ＨＵＤでキーを押したまま、左ドラッグで移動、ホイールでサイズ変更、Shiftでより細かく調整します。サイズは名前と制作者ごとに、このアカウント用としてこのＰＣに保存されます。ＨＵＤの編集中は、このキーを押さずにホイールを回すとすべてのＨＵＤの表示がズームします。
-cli-help = { "Savageビューア\u000A\u000A使い方：aurora-viewer [--title <text>] [--fps-limit <fps>] [--vr] [--language <code>] [--grid <name>]\u000A                     [--login <first> <last> <password>] [--version] [--uninstall] [<slurl>]\u000A\u000A  --title <text>   このウィンドウ（\"Savageビューア <version> - <text>\"）とログファイル\u000A                   （aurora-<text>.log、デモモードでは aurora-demo-<text>.log）に名前を付ける\u000A  --fps-limit <fps>  初期設定を保存せずに、このプロセスを1～500 ＦＰＳに制限する\u000A  --language <code>  このプロセスのＵＩ言語を上書きする（" }{ $languages }{ "）\u000A  --grid <name>    agni、aditi、保存されたグリッド名、またはログインＵＲＩで起動する（--loginuri <uri> も可）\u000A  --login <first> <last> <password>  このアカウントですぐにログインする\u000A  <slurl>, --url <slurl>  この場所から開始する。以降の引数は読み込まれない。すでに\u000A                   起動しているビューアがあれば、そちらが受け取る\u000A  --vr             ワールドが表示されたらVRに入ります（ヘッドセット接続時）\u000A  -V, --version   起動せずにコンパイルされたビューアのバージョンを表示する\u000A  --uninstall      Auroraがフォルダの外に登録したもの（リンクハンドラ、資格情報ストア、\u000A                   Blenderアドオン）を削除し、その内容と残りのフォルダを表示して終了する\u000A  -h, --help       このヘルプを表示する\u000A\u000Aテスト用のスイッチは環境変数です（AURORA_DEMO=1、AURORA_CAPTURE=...）：\u000AREADME.md を参照してください。" }
-demo-media-page = { "data:text/html;charset=utf-8,<html><body style='margin:0;height:100vh;background:linear-gradient(135deg,%232a1f4a,%230f6d6d);color:white;font:56px sans-serif;text-align:center'><h1 style='margin:40px 0 10px'>Auroraメディア</h1><p id='t' style='font-size:90px;margin:10px'>--</p><button onclick=\"document.body.style.background='%237a3b9c';this.textContent='クリックされました！'\" style='font-size:48px;padding:10px 40px'>クリック</button><br><input placeholder='ここに記入' style='font-size:44px;margin-top:30px;width:70%'><script>setInterval(function(){document.getElementById('t').textContent=new Date().toLocaleTimeString()},250)</script></body></html>" }
+cli-help = { "Savageビューア\u000A\u000A使い方：aurora-viewer [--title <text>] [--fps-limit <fps>] [--vr] [--language <code>] [--grid <name>]\u000A                     [--login <first> <last> <password>] [--version] [--uninstall] [<slurl>]\u000A\u000A  --title <text>   このウィンドウ（\"Savageビューア <version> - <text>\"）とログファイル\u000A                   （aurora-<text>.log、デモモードでは aurora-demo-<text>.log）に名前を付ける\u000A  --fps-limit <fps>  初期設定を保存せずに、このプロセスを1～500 ＦＰＳに制限する\u000A  --language <code>  このプロセスのＵＩ言語を上書きする（" }{ $languages }{ "）\u000A  --grid <name>    agni、aditi、保存されたグリッド名、またはログインＵＲＩで起動する（--loginuri <uri> も可）\u000A  --login <first> <last> <password>  このアカウントですぐにログインする\u000A  <slurl>, --url <slurl>  この場所から開始する。以降の引数は読み込まれない。すでに\u000A                   起動しているビューアがあれば、そちらが受け取る\u000A  --vr             ワールドが表示されたらVRに入ります（ヘッドセット接続時）\u000A  -V, --version   起動せずにコンパイルされたビューアのバージョンを表示する\u000A  --uninstall      Savageがフォルダの外に登録したもの（リンクハンドラ、資格情報ストア、\u000A                   Blenderアドオン）を削除し、その内容と残りのフォルダを表示して終了する\u000A  -h, --help       このヘルプを表示する\u000A\u000Aテスト用のスイッチは環境変数です（AURORA_DEMO=1、AURORA_CAPTURE=...）：\u000AREADME.md を参照してください。" }
+demo-media-page = { "data:text/html;charset=utf-8,<html><body style='margin:0;height:100vh;background:linear-gradient(135deg,%232a1f4a,%230f6d6d);color:white;font:56px sans-serif;text-align:center'><h1 style='margin:40px 0 10px'>Savageメディア</h1><p id='t' style='font-size:90px;margin:10px'>--</p><button onclick=\"document.body.style.background='%237a3b9c';this.textContent='クリックされました！'\" style='font-size:48px;padding:10px 40px'>クリック</button><br><input placeholder='ここに記入' style='font-size:44px;margin-top:30px;width:70%'><script>setInterval(function(){document.getElementById('t').textContent=new Date().toLocaleTimeString()},250)</script></body></html>" }
 
 # Secondary labels and status messages
 status-none-touch-touch = NONE／TOUCH：タッチ
@@ -11406,7 +11406,7 @@ texture-library-demo-linen = 天然リネン
 texture-library-demo-sources = デモ用マテリアル
 texture-library-folder-error = 一部のフォルダを読み込めませんでした。
 texture-library-manage = インベントリで整理
-texture-library-content-hint = フォルダ名は慣例です：サポートされているすべての種類は、Savage Libraryのどこにでも保存できます。
+texture-library-content-hint = フォルダ名は慣例です：サポートされているすべての種類は、Aurora Libraryのどこにでも保存できます。
 texture-library-demo-polished = 研磨
 
 texture-library-click-hint = クリックすると、編集モードで選択した面に適用します。
@@ -11653,7 +11653,7 @@ bridge-object-info-result =
     あなたの現在位置：{ $observer }
 bridge-query-timeout = ブリッジが要求した情報を時間内に返しませんでした。再試行してください。
 bridge-query-interrupted = リージョンまたはブリッジの接続の変更により、情報のリクエストが中断されました。再試行してください。
-ao-bootstrap-interrupted = #Savage に未完了のＡＯのインポートがすでにあります。再試行する前にインベントリで確認してください。
+ao-bootstrap-interrupted = #Aurora に未完了のＡＯのインポートがすでにあります。再試行する前にインベントリで確認してください。
 
 # Guided AO editor
 ao-states = 状態
@@ -11715,8 +11715,8 @@ build-linked-next = 次のリンクされたプリム
 build-linked-previous = 前のリンクされたプリム
 picker-inventory-tab = インベントリ
 picker-local-tab = ローカル
-picker-aurora-tab = Savageライブラリ
-picker-empty-library = Savageライブラリは空です。
+picker-aurora-tab = Auroraライブラリ
+picker-empty-library = Auroraライブラリは空です。
 
 build-link-pending = リンクを要求しました‐シミュレーターを待っています。
 build-link-unconfirmed = シミュレーターがリンクを確認しませんでした。
@@ -12638,7 +12638,7 @@ blender-shape-applied = Blenderで選択したスケルトンにシェイプを�
 blender-shape-tooltip = 着用中のシェイプの修正の権限を確認し、Blenderで新しいリグ付きの参照ボディを作成します。
 blender-shape-missing = 先に着用中のシェイプとそのインベントリの権限を読み込む必要があります。
 blender-shape-no-modify = このシェイプはSecond Lifeで修正できません。転送は利用できません。
-blender-shape-connect = 先にBlenderでSavageのプラグインを接続してください。
+blender-shape-connect = 先にBlenderでAuroraのプラグインを接続してください。
 blender-shape-update-plugin = Blenderのプラグインを0.9.0以降に更新してから、再接続してください。
 blender-shape-sending = シェイプを転送しています…
 blender-shape-changed = 着用中のシェイプまたはその修正の権限が変わりました。転送をキャンセルしました。
@@ -12647,7 +12647,7 @@ blender-shape-success = シェイプを新しいリグ付きの参照ボディ�
 blender-shape-failed = シェイプの転送に失敗しました：{ $error }
 blender-shape-invalid = このシェイプには有効で使用可能なアバターの定義が含まれていません。
 blender-shape-too-large = このシェイプは8 MiBの転送上限を超えています。
-blender-live-bundled-version = Savageライブメッシュ{ $version }
+blender-live-bundled-version = Auroraライブメッシュ{ $version }
 blender-live-detect = Blenderを検索
 blender-live-choose-blender = Blenderにインストール…
 blender-live-checking = 選択したBlenderを確認しています…
@@ -12718,7 +12718,7 @@ blender-live-counts =
 blender-live-revision = リビジョン{ $revision }
 blender-live-error = プレビュー：{ $error }
 blender-live-no-avatar = アバターはまだ利用できません。表示されてからもう一度送信してください。
-blender-live-instructions = BlenderでSavage LiveMeshをインストールし、メッシュを選択してから、サイドバー › Savage › Connect to Savage を開いてください。
+blender-live-instructions = BlenderでAurora LiveMeshをインストールし、メッシュを選択してから、サイドバー › Aurora › Connect to Aurora を開いてください。
 blender-object-world = ワールド内のローカルオブジェクト
 blender-object-detached = Rezも装着もされていない
 blender-object-attached = ローカルに装着：{ $point }

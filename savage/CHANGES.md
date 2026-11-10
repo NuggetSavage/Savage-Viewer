@@ -7,23 +7,27 @@ it is rewritten daily there and any line of ours would conflict.
 
 ## 2026-11-10: Savage in every label, the SVG icon, the Black Dragon controls
 
-- **Name:** every message of the three catalogues says Savage where it
+- **Name:** the messages of the three catalogues say Savage where they
   said Aurora (feature names included: the Savage bridge, the Savage
   style, the Savage page of Preferences, the updater, crash and bug
-  texts, the offline demo). Kept on purpose: the About line that credits
+  texts, the offline demo), and so do the crash window, the memory
+  monitor, the Dev Toolbox report header and the log's first line. Kept
+  on purpose, because they name real things: the About line that credits
   Aurora Viewer (the licence asks for it), the "Aurora Team" name tag
-  (it marks upstream's developers in the world), links, and the paths of
-  the inventory folder `#Aurora/...` and of `aurora.log`, which are real
-  names on the account and on disk. The log's first line and the overlay
-  advice say Savage Viewer too.
-- **Guard:** `the_viewer_is_named_savage_viewer` now fails on any message
-  that names Aurora outside those three keys, a link or a path.
+  (upstream's developers), the inventory folders `#Aurora` and
+  `Aurora Library`, the Blender add-on "Aurora LiveMesh" and its panel,
+  the bundled model "Aurora 3D", links, `aurora.log`, the `aurora-viewer`
+  command in the help and the `AURORA_*` variables.
+- **Guard:** `the_viewer_is_named_savage_viewer` fails on any "Aurora" in
+  a message outside those keys and real names.
+- **Known mismatch:** the update, wiki and privacy texts say Savage while
+  the feed, the wiki and the policy they open are upstream's.
 - **Reports:** "Report a bug", the crash window and the GitHub button go to
   this fork (`NuggetSavage/savage-viewer`), never to upstream
   (`links.rs`, `bug_report/github.rs`, `crash/github.rs`). The in-viewer
   direct send still uses upstream's GitHub App identifier and is expected
   to fail on this repository; the browser route works once the fork has
-  its issues turned on.
+  its issues turned on (they are off: the links lead nowhere until then).
 - **Icon:** `assets/branding/savage.ico`, `savage-logo.png`,
   `savage-logo.svg`, `savage-logo-white.svg`, `savage-logo-black.svg`
   (an original "SVG" letter mark, letters from Poppins Bold, OFL). The
@@ -33,13 +37,16 @@ it is rewritten daily there and any line of ours would conflict.
 - **Program file:** `savage/savage-build.ps1` copies the build as
   `savage-viewer.exe` and removes the previous copy named
   `aurora-viewer.exe` from the viewer folder. Cargo's package and the
-  build output keep upstream's name.
+  build output keep upstream's name. The link-handler repair knows both
+  file names (`url_scheme.rs`).
 - **Light strength:** `Settings::light_strength` (0.25 to 10, 1 by
   default; Preferences > Graphics > Light > Exposure and glow) multiplies
   the sun or moon colour a frame is lit with (`app.rs`, `sun_color`).
   After Black Dragon's RenderGlobalLightStrength; saved with the graphics
   profiles (`graphics_presets::Effects::light_strength`, 1 for a profile
-  written before it).
+  written before it). Like the glow it belongs to no level: choosing a
+  level keeps it, and it never turns a level into Custom. Held at 1 or
+  less while RLVa locks the environment (`frame_light_strength`).
 - **Black Dragon look:** a button (Preferences > Graphics > Quality) that
   turns on the finest sun and projector shadows, the contact shadows,
   SSR, HDR, glow, bloom, sharpening at 0.4 and a light strength of 2

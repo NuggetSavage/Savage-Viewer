@@ -6,7 +6,7 @@
 pub const GITHUB: &str = "https://github.com/NuggetSavage/savage-viewer";
 /// Issue template chooser, opened in the browser by "Report a bug" (login
 /// screen, top bar, Help menu) and by the crash window.
-pub const NEW_ISSUE: &str = "https://github.com/NuggetSavage/savage-viewer/issues/new";
+pub const NEW_ISSUE: &str = "https://github.com/NuggetSavage/savage-viewer/issues/new/choose";
 /// The project's wiki, generated from the guides of `docs/`
 /// (`scripts/build-wiki.ps1`): Help › Aurora Viewer wiki.
 pub const WIKI: &str = "https://github.com/Aurora-Viewer/Aurora-Viewer/wiki";

@@ -176,7 +176,7 @@ impl Notice {
         match self {
             Notice::NoDiscrete => {
                 "no discrete GPU visible to Vulkan: on a hybrid PC the NVIDIA Control Panel's \
-                 \"Preferred graphics processor\" for aurora-viewer.exe (VK_LAYER_NV_optimus) can hide it, \
+                 \"Preferred graphics processor\" for savage-viewer.exe (VK_LAYER_NV_optimus) can hide it, \
                  and a driver left in that state until the PC restarts; \
                  Windows › Graphics settings do not apply to Vulkan"
             }

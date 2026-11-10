@@ -430,7 +430,7 @@ import-preview-reset-view = Reset view
 import-preview-model = Preview model
 import-preview-sphere = Sphere
 import-preview-cube = Cube
-import-preview-aurora = Savage 3D
+import-preview-aurora = Aurora 3D
 import-no-map = None
 keybinds-import-files = Open the import window
 keybinds-hide-interface = Hide / show the interface
@@ -5798,7 +5798,7 @@ ui-options-graphics-card-automatic = Automatic
 ui-options-graphics-card-help = Automatic takes the dedicated card first. Applied at the next start.
 ui-options-graphics-card-in-use = In use: { $name }.
 ui-options-graphics-card-choice = Card to use
-ui-options-graphics-card-no-discrete = Only the integrated graphics is visible to the viewer. On a PC with an NVIDIA card, set "Preferred graphics processor" to the NVIDIA card for aurora-viewer.exe in the NVIDIA Control Panel, then restart the PC if the card still does not show.
+ui-options-graphics-card-no-discrete = Only the integrated graphics is visible to the viewer. On a PC with an NVIDIA card, set "Preferred graphics processor" to the NVIDIA card for savage-viewer.exe in the NVIDIA Control Panel, then restart the PC if the card still does not show.
 ui-options-graphics-card-cannot-present = The dedicated card cannot draw the viewer's window: plug the monitor into the dedicated card's outputs, not the motherboard's.
 ui-options-overlays = Overlays
 ui-options-allow-overlays = Allow other programs' overlays
@@ -7832,7 +7832,7 @@ hud-move-locked = Lock quick movement
 hud-local-scale-reset = Reset to 100%
 hud-local-scale-forget = Forget saved size
 hud-local-scale-help = Hold the HUD key: left drag to move, wheel to resize, Shift for finer steps. Size is saved on this PC by name and creator, for this account. While editing a HUD, the wheel without this key zooms the view of all HUDs.
-cli-help = { "Savage Viewer\u000A\u000AUsage: aurora-viewer [--title <text>] [--fps-limit <fps>] [--vr] [--language <code>] [--grid <name>]\u000A                     [--login <first> <last> <password>] [--version] [--uninstall] [<slurl>]\u000A\u000A  --title <text>   Name this window (\"Savage Viewer <version> - <text>\") and its log\u000A                   file (aurora-<text>.log, aurora-demo-<text>.log in demo mode)\u000A  --fps-limit <fps>  Cap this process at 1..500 FPS without saving preferences\u000A  --language <code>  Override this process's UI language (" }{ $languages }{ ")\u000A  --grid <name>    Start on agni, aditi, a saved grid name or a login URI (also --loginuri <uri>)\u000A  --login <first> <last> <password>  Log in with this account at once\u000A  <slurl>, --url <slurl>  Start at this place; nothing after it is read. A viewer\u000A                   already running receives it instead\u000A  --vr             Enter VR once the world shows (headset connected)\u000A  -V, --version   Show the compiled viewer version without starting it\u000A  --uninstall      Remove what Savage registered outside its folders (link handler,\u000A                   credential store, Blender add-on), print it and the folders left, then exit\u000A  -h, --help       Show this help\u000A\u000ATest switches are environment variables (SAVAGE_DEMO=1, AURORA_CAPTURE=...):\u000Asee README.md." }
+cli-help = { "Savage Viewer\u000A\u000AUsage: aurora-viewer [--title <text>] [--fps-limit <fps>] [--vr] [--language <code>] [--grid <name>]\u000A                     [--login <first> <last> <password>] [--version] [--uninstall] [<slurl>]\u000A\u000A  --title <text>   Name this window (\"Savage Viewer <version> - <text>\") and its log\u000A                   file (aurora-<text>.log, aurora-demo-<text>.log in demo mode)\u000A  --fps-limit <fps>  Cap this process at 1..500 FPS without saving preferences\u000A  --language <code>  Override this process's UI language (" }{ $languages }{ ")\u000A  --grid <name>    Start on agni, aditi, a saved grid name or a login URI (also --loginuri <uri>)\u000A  --login <first> <last> <password>  Log in with this account at once\u000A  <slurl>, --url <slurl>  Start at this place; nothing after it is read. A viewer\u000A                   already running receives it instead\u000A  --vr             Enter VR once the world shows (headset connected)\u000A  -V, --version   Show the compiled viewer version without starting it\u000A  --uninstall      Remove what Savage registered outside its folders (link handler,\u000A                   credential store, Blender add-on), print it and the folders left, then exit\u000A  -h, --help       Show this help\u000A\u000ATest switches are environment variables (AURORA_DEMO=1, AURORA_CAPTURE=...):\u000Asee README.md." }
 demo-media-page = { "data:text/html;charset=utf-8,<html><body style='margin:0;height:100vh;background:linear-gradient(135deg,%232a1f4a,%230f6d6d);color:white;font:56px sans-serif;text-align:center'><h1 style='margin:40px 0 10px'>Savage media</h1><p id='t' style='font-size:90px;margin:10px'>--</p><button onclick=\"document.body.style.background='%237a3b9c';this.textContent='Clicked!'\" style='font-size:48px;padding:10px 40px'>Click</button><br><input placeholder='Type here' style='font-size:44px;margin-top:30px;width:70%'><script>setInterval(function(){document.getElementById('t').textContent=new Date().toLocaleTimeString()},250)</script></body></html>" }
 
 # Secondary labels and status messages
@@ -11422,7 +11422,7 @@ texture-library-demo-linen = Natural linen
 texture-library-demo-sources = Demo materials
 texture-library-folder-error = Some folders could not be loaded.
 texture-library-manage = Organize in inventory
-texture-library-content-hint = Folder names are conventions: every supported type can be stored anywhere in Savage Library.
+texture-library-content-hint = Folder names are conventions: every supported type can be stored anywhere in Aurora Library.
 texture-library-demo-polished = Polished
 
 texture-library-click-hint = Click to apply to the faces selected in Edit mode.
@@ -11669,7 +11669,7 @@ bridge-object-info-result =
     Your current position: { $observer }
 bridge-query-timeout = The bridge did not return the requested information in time. Try again.
 bridge-query-interrupted = The information request was interrupted by a region or bridge connection change. Try again.
-ao-bootstrap-interrupted = An unfinished AO import already exists in #Savage. Review it in inventory before retrying.
+ao-bootstrap-interrupted = An unfinished AO import already exists in #Aurora. Review it in inventory before retrying.
 
 # Guided AO editor
 ao-states = States
@@ -11731,8 +11731,8 @@ build-linked-next = Next linked prim
 build-linked-previous = Previous linked prim
 picker-inventory-tab = Inventory
 picker-local-tab = Local
-picker-aurora-tab = Savage Library
-picker-empty-library = Your Savage Library is empty.
+picker-aurora-tab = Aurora Library
+picker-empty-library = Your Aurora Library is empty.
 
 build-link-pending = Link request sent — waiting for the simulator.
 build-link-unconfirmed = Linking was not confirmed by the simulator.
@@ -12663,7 +12663,7 @@ blender-shape-applied = Shape applied to the selected skeleton in Blender.
 blender-shape-tooltip = Check the worn shape’s Modify rights and create a new rigged reference body in Blender.
 blender-shape-missing = The worn shape and its inventory rights must be loaded first.
 blender-shape-no-modify = This shape cannot be modified in Second Life. Transfer is unavailable.
-blender-shape-connect = Connect the Savage plug-in in Blender first.
+blender-shape-connect = Connect the Aurora plug-in in Blender first.
 blender-shape-update-plugin = Update the Blender plug-in to 0.9.0 or later, then reconnect it.
 blender-shape-sending = Transferring shape…
 blender-shape-changed = The worn shape or its Modify rights changed. Transfer cancelled.
@@ -12672,7 +12672,7 @@ blender-shape-success = Shape imported in Blender as a new rigged reference body
 blender-shape-failed = Shape transfer failed: { $error }
 blender-shape-invalid = This shape does not contain a valid, usable avatar definition.
 blender-shape-too-large = This shape exceeds the 8 MiB transfer limit.
-blender-live-bundled-version = Savage LiveMesh { $version }
+blender-live-bundled-version = Aurora LiveMesh { $version }
 blender-live-detect = Search for Blender
 blender-live-choose-blender = Install in Blender…
 blender-live-choose-executable = Choose the Blender executable to install the plug-in
@@ -12743,7 +12743,7 @@ blender-live-counts =
 blender-live-revision = Revision { $revision }
 blender-live-error = Preview: { $error }
 blender-live-no-avatar = Your avatar is not available yet. Send again after it appears.
-blender-live-instructions = In Blender, install Savage LiveMesh, select your meshes, then open Sidebar › Savage › Connect to Savage.
+blender-live-instructions = In Blender, install Aurora LiveMesh, select your meshes, then open Sidebar › Aurora › Connect to Aurora.
 blender-object-world = Local object in the world
 blender-object-detached = Not rezzed or attached
 blender-object-attached = Attached locally: { $point }

@@ -63,7 +63,7 @@ pub fn target_avatar(target: Target, me: Uuid, nearest: Option<Uuid>, wearer: Op
 /// The first line of every copy: which build and which tool wrote it, so an
 /// agent reading it knows which code to look at.
 pub fn header(version: &str, tool: &str, target: Option<Target>, names_hidden: bool) -> String {
-    let mut line = format!("Aurora {version} · {tool}");
+    let mut line = format!("Savage {version} · {tool}");
     if let Some(target) = target {
         line.push_str(" · target: ");
         line.push_str(target.code());
@@ -92,9 +92,9 @@ mod tests {
     fn header_names_build_tool_and_target() {
         assert_eq!(
             header("0.7.2+12.g1a2b3c", "J2", Some(Target::Nearest), true),
-            "Aurora 0.7.2+12.g1a2b3c · J2 · target: nearest avatar · names hidden"
+            "Savage 0.7.2+12.g1a2b3c · J2 · target: nearest avatar · names hidden"
         );
-        assert_eq!(header("0.7.2", "J4", None, false), "Aurora 0.7.2 · J4");
+        assert_eq!(header("0.7.2", "J4", None, false), "Savage 0.7.2 · J4");
     }
 
     #[test]
@@ -109,7 +109,7 @@ mod tests {
         assert_eq!(target_avatar(Target::Selection, me, Some(other), None), None);
         assert_eq!(
             header("0.8.3", "J9", Some(Target::MyAvatar), true),
-            "Aurora 0.8.3 · J9 · target: my avatar · names hidden"
+            "Savage 0.8.3 · J9 · target: my avatar · names hidden"
         );
     }
 

@@ -281,9 +281,15 @@ impl Preset {
     /// like the slider of the page). The Glow switch stays the user's
     /// (module comment).
     pub fn apply(self, s: &mut Settings) {
+        // (the light strength, like the glow, is no level's: it stays)
+        let level = self.values();
         Values {
             glow: s.glow,
-            ..self.values()
+            effects: Effects {
+                light_strength: s.light_strength,
+                ..level.effects
+            },
+            ..level
         }
         .write(s);
         s.graphics_saved_active = None;
@@ -666,7 +672,8 @@ impl Values {
             } else {
                 Effects::OFF.screen_indirect_intensity
             },
-            light_strength: round(e.light_strength, 0.05),
+            // (as the glow: no level sets it, so it never reads as Custom)
+            light_strength: Effects::OFF.light_strength,
         };
         Values {
             draw_distance: round(self.draw_distance, 1.0),
@@ -1328,11 +1335,19 @@ mod tests {
         Preset::Low.apply(&mut s);
         let before = s.clone();
         black_dragon_look(&mut s);
-        assert_eq!((s.shadow_quality, s.shadows, s.projector_shadows, s.contact_shadows), (4, true, true, true));
+        assert_eq!(
+            (s.shadow_quality, s.shadows, s.projector_shadows, s.contact_shadows),
+            (4, true, true, true)
+        );
         assert!(s.ssr && s.glow && s.bloom && s.hdr_emissive);
         assert_eq!(s.light_strength, BLACK_DRAGON_LIGHT);
         assert_eq!(s.draw_distance, before.draw_distance);
         assert_eq!(s.lod_factor, before.lod_factor);
+        // a level leaves the light strength alone and still reads as itself
+        Preset::High.apply(&mut s);
+        assert_eq!(s.light_strength, BLACK_DRAGON_LIGHT);
+        assert_eq!(Preset::matching(&s), Some(Preset::High));
+        black_dragon_look(&mut s);
         // a saved profile keeps the light strength, and one from before it reads as 1
         let saved = serde_json::to_value(Values::read(&s)).expect("save");
         let mut other = Settings::default();
@@ -1340,7 +1355,10 @@ mod tests {
         assert_eq!(other.light_strength, BLACK_DRAGON_LIGHT);
         let mut old = saved;
         old["effects"].as_object_mut().expect("effects").remove("light_strength");
-        assert_eq!(serde_json::from_value::<Values>(old).expect("older profile").effects.light_strength, 1.0);
+        assert_eq!(
+            serde_json::from_value::<Values>(old).expect("older profile").effects.light_strength,
+            1.0
+        );
     }
 
     #[test]
@@ -1350,5 +1368,9 @@ mod tests {
         assert_eq!(light_strength(0.0), 0.25);
         assert_eq!(light_strength(50.0), 10.0);
         assert_eq!(light_strength(f32::NAN), 1.0);
+        // an RLVa environment lock never lets it brighten the forced sky
+        assert_eq!(crate::settings::frame_light_strength(4.0, true), 1.0);
+        assert_eq!(crate::settings::frame_light_strength(0.5, true), 0.5);
+        assert_eq!(crate::settings::frame_light_strength(4.0, false), 4.0);
     }
 }

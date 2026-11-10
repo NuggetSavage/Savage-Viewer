@@ -223,7 +223,9 @@ mod win {
             let Some(exe) = read(HKEY_CURRENT_USER, &format!(r"{class}\shell\open\command"), None).and_then(|c| command_exe(&c)) else {
                 continue;
             };
-            let aurora = exe.file_name().is_some_and(|n| n.eq_ignore_ascii_case("aurora-viewer.exe"));
+            let aurora = exe
+                .file_name()
+                .is_some_and(|n| n.eq_ignore_ascii_case("aurora-viewer.exe") || n.eq_ignore_ascii_case("savage-viewer.exe"));
             if aurora && !exe.exists() {
                 log::info!("{scheme} links: the registered viewer moved");
                 if let Err(e) = register_scheme(scheme) {

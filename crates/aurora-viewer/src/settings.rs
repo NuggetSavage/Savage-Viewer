@@ -1532,8 +1532,16 @@ pub(crate) fn light_strength_default() -> f32 {
     LIGHT_STRENGTH
 }
 
-/// The light strength a frame is drawn with: the setting held in its
-/// range, 1 for a value that is not a number.
+/// The light strength a frame is lit with. While RLVa locks the
+/// environment (@setenv) it never brightens the sky that was forced: at
+/// most 1, as the looks kept on the world view are held back then.
+pub(crate) fn frame_light_strength(setting: f32, env_locked: bool) -> f32 {
+    let strength = light_strength(setting);
+    if env_locked { strength.min(LIGHT_STRENGTH) } else { strength }
+}
+
+/// The light strength setting held in its range, 1 for a value that is
+/// not a number.
 pub(crate) fn light_strength(setting: f32) -> f32 {
     if setting.is_finite() {
         setting.clamp(*LIGHT_STRENGTH_RANGE.start(), *LIGHT_STRENGTH_RANGE.end())

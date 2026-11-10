@@ -10650,7 +10650,7 @@ impl App {
             tex_anim_at: hold.map(|h| h.at),
             sun_dir: env.sun_dir,
             sun_visible: env.sun_visible,
-            sun_color: env.sun_color * crate::settings::light_strength(self.settings.light_strength),
+            sun_color: env.sun_color * crate::settings::frame_light_strength(self.settings.light_strength, self.world.eep.rlva_locked),
             sky_zenith: env.zenith,
             sky_horizon: env.horizon,
             ground_color: env.ground,

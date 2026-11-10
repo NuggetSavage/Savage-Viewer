@@ -683,7 +683,7 @@ impl App {
         let mut out = String::new();
         let _ = writeln!(
             out,
-            "Aurora {} (commit {}, {} build)",
+            "Savage {} (commit {}, {} build)",
             aurora_version::version(),
             aurora_version::commit(),
             env!("AURORA_BUILD_PROFILE")

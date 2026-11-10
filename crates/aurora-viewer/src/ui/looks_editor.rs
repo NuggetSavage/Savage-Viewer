@@ -105,6 +105,11 @@ impl LooksUi {
                 }
             });
         }
+        // Savage Viewer's own: the looks stay on the world once this window
+        // is closed (`snapshot::looks::live`)
+        let resp = widgets::switch_labeled(ui, p, &mut s.looks_always, aurora_i18n::tr!("photo-looks-always"))
+            .on_hover_text(aurora_i18n::tr!("photo-looks-always-hint"));
+        keep_keys(&resp);
     }
 
     /// The stack: a row per look, the chosen one marked.

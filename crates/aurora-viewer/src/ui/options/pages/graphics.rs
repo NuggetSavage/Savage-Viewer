@@ -546,6 +546,12 @@ fn quality(cx: &mut Cx) {
             tr!("photo-quality-off-after-crash-help"),
             &field!(snapshot.quality_off_after_crash),
         );
+        // Savage Viewer's own: the photo's looks kept on the world view
+        cx.toggle(
+            tr!("photo-looks-always"),
+            tr!("photo-looks-always-hint"),
+            &field!(snapshot.looks_always),
+        );
     });
 }
 

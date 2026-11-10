@@ -5,6 +5,33 @@ every change of ours is on `savage` and is listed here, newest first, so a
 merge of upstream knows what to keep. Upstream's `TASKS.md` is left alone:
 it is rewritten daily there and any line of ours would conflict.
 
+## 2026-11-09: the name shown is Savage Viewer
+
+- **What:** the window title, the login, loading and About screens, the
+  quit and exit prompts, the error titles, the auto-response texts sent to
+  other residents, Windows' notification name, the "open with" name and
+  the program file's details (ProductName, FileDescription) say Savage
+  Viewer. The About line reads "a third-party viewer based on Aurora
+  Viewer, not provided or supported by Linden Lab".
+- **Files:** the three catalogues of `crates/aurora-i18n/locales/`,
+  `ui/about.rs`, `ui/login.rs`, `ui/login/carousel.rs`, `ui/loading.rs`,
+  `system_notify.rs`, `url_scheme.rs`, `crates/aurora-viewer/build.rs`.
+- **Guard:** `the_viewer_is_named_savage_viewer`
+  (`crates/aurora-i18n/tests/catalogs.rs`) fails if a message names
+  upstream's viewer outside the list kept on purpose.
+- **Still upstream's, on purpose:** the offline demo, the crash and bug
+  reports and the updates (upstream's services), the team name tag, the
+  wiki and privacy links, `NOTICE.md` and the licence. Feature names that
+  say "Aurora" alone (the Aurora bridge, the Aurora style) are unchanged.
+- **Not changed:** the program file's name (`aurora-viewer.exe`: the
+  owner's build script and her GShade setup point at it), the logo and the
+  icon, the settings folder, the photo folder, the names of the saved
+  logins in the system's credential store (renaming them would drop the
+  saved logins), the log's first line, the two user agents.
+- **Not verified here:** type-checked and linted with the whole viewer;
+  the catalogue tests pass (10 of 10); not run, not seen on screen, and
+  not reviewed by a second reader.
+
 ## 2026-11-09: the looks kept on the world view
 
 - **What:** a switch, "Keep on in the world" (photo window > Filters, and

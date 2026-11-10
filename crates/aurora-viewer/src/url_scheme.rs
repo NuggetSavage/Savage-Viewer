@@ -165,7 +165,7 @@ mod win {
         write(&class, None, "URL:Virtual World")?;
         write(&class, Some("URL Protocol"), "")?;
         write(&format!(r"{class}\DefaultIcon"), None, &format!("\"{exe}\",0"))?;
-        write(&format!(r"{class}\shell\open"), Some("FriendlyAppName"), "Aurora Viewer")?;
+        write(&format!(r"{class}\shell\open"), Some("FriendlyAppName"), "Savage Viewer")?;
         write(&format!(r"{class}\shell\open\command"), None, &format!("\"{exe}\" -url \"%1\""))?;
         log::info!("{scheme} links: registered for this user");
         Ok(())

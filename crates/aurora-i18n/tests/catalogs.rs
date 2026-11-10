@@ -229,3 +229,79 @@ fn japanese_falls_back_to_english_only_for_unknown_keys() {
     );
     assert_eq!(aurora_i18n::text_in("ja", "unknown-key"), "unknown-key");
 }
+
+/// The messages of a catalogue as written: key, then the text of its value
+/// (the lines that continue it included).
+fn written(source: &str) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    for line in source.lines() {
+        let key = line
+            .split_once(" = ")
+            .map(|(key, _)| key)
+            .or_else(|| line.strip_suffix(" ="))
+            .filter(|key| !key.is_empty() && key.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'));
+        match (key, out.last_mut()) {
+            (Some(key), _) => out.push((key.to_owned(), line.to_owned())),
+            (None, Some((_, text))) if line.starts_with(' ') => {
+                text.push('\n');
+                text.push_str(line);
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Savage Viewer's own. The messages that still name upstream on purpose:
+/// its offline demo, its crash and bug reports and its updates (they are
+/// upstream's services), its team, wiki and privacy page, anything that
+/// links to its site, and the About line that credits it.
+fn names_upstream_on_purpose(key: &str, text: &str) -> bool {
+    ["demo-", "crash-", "bug-", "update-"].iter().any(|prefix| key.starts_with(prefix))
+        || [
+            "nameplate-aurora-staff-tooltip",
+            "ui-bars-wiki",
+            "ui-options-privacy-policy-hint",
+            "about-third-party-viewer",
+        ]
+        .contains(&key)
+        || text.contains("aurora-viewer.org")
+}
+
+#[test]
+fn the_viewer_is_named_savage_viewer() {
+    for &(language, source) in SOURCES {
+        let messages = written(source);
+        assert!(
+            messages.len() > 1000,
+            "{language}: the catalogue was not read ({} messages)",
+            messages.len()
+        );
+        for (key, text) in &messages {
+            if names_upstream_on_purpose(key, text) {
+                continue;
+            }
+            assert!(
+                !text.contains("Aurora Viewer") && !text.contains("Auroraビューア"),
+                "{language}: {key} still names upstream's viewer: {text}"
+            );
+        }
+        let value = |key: &str| {
+            let found = messages.iter().find(|(k, _)| k == key);
+            found
+                .map(|(_, text)| text.as_str())
+                .unwrap_or_else(|| panic!("{language}: {key} is missing"))
+        };
+        // the window title, the login screen, the About menu
+        for key in ["cli-aurora-viewer", "ui-login-aurora-viewer-v", "ui-bars-about"] {
+            assert!(value(key).contains("Savage"), "{language}: {key}: {}", value(key));
+        }
+        // the About line names this viewer and credits the one it is based on
+        let about = value("about-third-party-viewer");
+        assert!(
+            about.contains("Savage Viewer") && about.contains("Aurora Viewer"),
+            "{language}: {about}"
+        );
+        assert!(about.contains("Linden Lab"), "{language}: {about}");
+    }
+}

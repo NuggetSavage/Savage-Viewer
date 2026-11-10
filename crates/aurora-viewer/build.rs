@@ -88,8 +88,8 @@ fn windows_resources() {
 
     let mut res = winresource::WindowsResource::new();
     res.set_icon(&icon.to_string_lossy())
-        .set("ProductName", "Aurora Viewer")
-        .set("FileDescription", "Aurora Viewer")
+        .set("ProductName", "Savage Viewer")
+        .set("FileDescription", "Savage Viewer")
         .set("OriginalFilename", "aurora-viewer.exe")
         .set("ProductVersion", &display)
         .set("FileVersion", &display)

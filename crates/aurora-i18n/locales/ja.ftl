@@ -1013,9 +1013,9 @@ script-experience-choose = 体験を選択…
 script-experiences-unavailable = 体験を読み込めません。現在の関連付けは保持されています。再試行してください。
 script-experience-demo = デモ体験
 script-disconnected = 切断されました。保存されていないソースは保持されているので、コピーできます。
-exit-title = Auroraビューアを閉じますか？
+exit-title = Savageビューアを閉じますか？
 exit-world-body = ビューアを終了しますか？それともログイン画面に戻りますか？
-exit-login-body = Auroraビューアを終了しますか？
+exit-login-body = Savageビューアを終了しますか？
 exit-waiting = ログアウトしています…
 exit-logout = ログアウト
 exit-logout-hint = セッションを終了してログイン画面に戻ります。
@@ -1689,15 +1689,15 @@ app-aurora-elsewhere = Auroraの別エリア
 common-aurora-demo = Auroraのデモ
 demo-aurora-viewer-rust-vulkan = { "Auroraビューア\u000ARust・Vulkan" }
 demo-aurora-viewer-rust-metal = { "Auroraビューア\u000ARust・Metal" }
-ui-login-aurora-viewer-v = Auroraビューア　v{ $value0 }
-cli-aurora-viewer = { "Auroraビューア" }{ $version }
-cli-aurora-viewer-2 = { "Auroraビューア" }{ $version }{ "‐" }{ $t }
-common-aurora-viewer = { "Auroraビューア" }{ $value0 }
-app-aurora-viewer-unable-to-initialize-vulkan = { "Auroraビューア：Vulkanを初期化できませんでした：" }{ $e }
-app-aurora-viewer-unable-to-initialize-metal = { "Auroraビューア：Metalを初期化できませんでした：" }{ $e }
-app-graphics-start-failed-title = Auroraビューアを起動できません
+ui-login-aurora-viewer-v = Savageビューア　v{ $value0 }
+cli-aurora-viewer = { "Savageビューア" }{ $version }
+cli-aurora-viewer-2 = { "Savageビューア" }{ $version }{ "‐" }{ $t }
+common-aurora-viewer = { "Savageビューア" }{ $value0 }
+app-aurora-viewer-unable-to-initialize-vulkan = { "Savageビューア：Vulkanを初期化できませんでした：" }{ $e }
+app-aurora-viewer-unable-to-initialize-metal = { "Savageビューア：Metalを初期化できませんでした：" }{ $e }
+app-graphics-start-failed-title = Savageビューアを起動できません
 app-graphics-start-failed =
-    Auroraビューアはウィンドウを描画するためのグラフィックカードを開けませんでした。
+    Savageビューアはウィンドウを描画するためのグラフィックカードを開けませんでした。
 
     試すべきこと：
     ・グラフィックカードのドライバを更新する。
@@ -1708,7 +1708,7 @@ app-graphics-start-failed =
     詳細：{ $e }
 
     今回の起動のログ：{ $log }
-app-gpu-stall-title = Auroraビューア：グラフィックカードが応答していません
+app-gpu-stall-title = Savageビューア：グラフィックカードが応答していません
 app-gpu-stall =
     グラフィックカードが{ $seconds }秒間画像を完成させていません。Auroraは動作を続けています（ワールド、サウンド、チャットは継続）が、カードが再び応答するまで何も描画できません。
 
@@ -1722,7 +1722,7 @@ app-gpu-stall =
 app-gpu-recovered-title = グラフィックカードがリセットされました
 app-gpu-recovered = グラフィックカードのドライバーがリセットされました（画像の描画に時間がかかりすぎた、ビデオメモリがいっぱいになった、または他のプログラムがグラフィックカードを使用した可能性があります）。Auroraはグラフィックカードでウィンドウを開き直しました。ログインしたままで、ワールドはまもなく再読み込みされます。
 app-gpu-recovered-safe = 数分のうちに、グラフィックカードのドライバーが再びリセットされました。再発を防ぐため、Auroraは安全なグラフィック設定（Potatoレベル）でウィンドウを開き直しました。ログインしたままです。グラフィック設定は保存されており、ログイン画面で元に戻すことができます。
-app-gpu-lost-title = Auroraビューア：グラフィックカードが失われました
+app-gpu-lost-title = Savageビューア：グラフィックカードが失われました
 app-gpu-lost =
     Auroraでグラフィックカードが動作しなくなりました。ドライバーがリセットされた（画像の描画に時間がかかりすぎた、またはビデオメモリがいっぱいになった）、あるいはグラフィックカードが取り外されたか、他のプログラムによって使用された可能性があります。これ以上何も描画できません。ＯＫをクリックするとAuroraが終了します（正常にログアウトされます）。
 
@@ -2426,7 +2426,7 @@ ui-options-flash-conversations-nearby-hint = 会話ウィンドウを閉じて�
 ui-options-announce-incoming-im = 相手が入力を始めたらIMの着信を知らせる
 ui-options-announce-incoming-im-hint = 住人があなたへのIMを入力し始めると、メッセージが届く前にその会話が開き、「着信メッセージ：」と名前が表示されます。
 ui-options-unread-ims-in-window-title = ウィンドウのタイトルに未読IMの数を表示する
-ui-options-unread-ims-in-window-title-hint = 未読のIM、グループチャット、会議があるあいだ、その数がウィンドウのタイトルの先頭に「(3) Aurora Viewer」のように表示されます。タスクバーにも表示されます。
+ui-options-unread-ims-in-window-title-hint = 未読のIM、グループチャット、会議があるあいだ、その数がウィンドウのタイトルの先頭に「(3) Savage Viewer」のように表示されます。タスクバーにも表示されます。
 common-copy = コピー
 build-ui-features-copy-attributes = 属性をコピー
 build-ui-object-copy-object-settings-to-clipboard = オブジェクト設定をクリップボードにコピー
@@ -3879,8 +3879,8 @@ build-ui-general-next-owner = 次の所有者：
 build-ui-floaters-next-owner-can = 次の所有者ができること：
 world-mod-could-not-save-the-profile = プロフィールを保存できませんでした（{ $reason }）。
 ui-land-general-owner-contributes-when-deeding-land = 土地をグループに譲渡するとき所有者が拠出
-world-status-the-resident-you-messaged-has-enabled-aurora-viewer-s = メッセージを送った住人は、すべてのフレンド申請を拒否するAuroraビューアのモードを有効にしています。フレンド申請で煩わされたくないようですが、ＩＭは送信できます。
-world-status-the-resident-you-messaged-has-enabled-aurora-viewer-s-2 = メッセージを送った住人は、すべてのテレポートの提案とリクエストを拒否するAuroraビューアのモードを有効にしています。テレポートのリクエストで煩わされたくないようですが、ＩＭは送信できます。
+world-status-the-resident-you-messaged-has-enabled-aurora-viewer-s = メッセージを送った住人は、すべてのフレンド申請を拒否するSavageビューアのモードを有効にしています。フレンド申請で煩わされたくないようですが、ＩＭは送信できます。
+world-status-the-resident-you-messaged-has-enabled-aurora-viewer-s-2 = メッセージを送った住人は、すべてのテレポートの提案とリクエストを拒否するSavageビューアのモードを有効にしています。テレポートのリクエストで煩わされたくないようですが、ＩＭは送信できます。
 world-status-the-resident-you-messaged-has-enabled-aurora-viewer-s-3 = メッセージを送った住人は自動返信モードを有効にしており、煩わされたくないようです。あなたのメッセージは後で読めるよう、相手のＩＭウィンドウに表示されます。
 world-status-the-resident-you-messaged-is-away-your-message-will = メッセージを送った住人は離席中です。あなたのメッセージは後で読めるよう、相手のＩＭウィンドウに表示されます。
 world-status-the-resident-you-messaged-has-blocked-all-messages-from = メッセージを送った住人は、あなたからのすべてのメッセージをブロックしています。
@@ -4962,7 +4962,7 @@ world-mod-someone = 誰か
 demo-has-anyone-seen-the-new-eep-sky = 新しいＥＥＰの空、誰か見た？
 demo-conference-invitation = 誰か広場の見学に行かない？
 common-quit = 終了
-ui-bars-quit-aurora-viewer = Auroraビューアを終了
+ui-bars-quit-aurora-viewer = Savageビューアを終了
 ui-options-camera-exit-with-mouse-wheel = マウスホイールで解除
 ui-contacts-leave-group = グループを脱退
 ui-contacts-leave-group-2 = グループ「{ $n }」を脱退しますか？
@@ -5705,7 +5705,7 @@ ui-bars-script-library = スクリプトライブラリ
 ui-bars-message-of-the-day = 本日のメッセージ
 ui-bars-wiki = Auroraビューア wiki
 ui-bars-knowledge-base = ナレッジベース
-ui-bars-about = Auroraビューアについて
+ui-bars-about = Savageビューアについて
 cmdline-dice-successes = { "成功数：" }{ $successes }
 build-manip-south = 南
 common-next = 次へ
@@ -7817,7 +7817,7 @@ hud-move-locked = クイック移動をロック
 hud-local-scale-reset = １００％にリセット
 hud-local-scale-forget = 保存したサイズを消去
 hud-local-scale-help = ＨＵＤでキーを押したまま、左ドラッグで移動、ホイールでサイズ変更、Shiftでより細かく調整します。サイズは名前と制作者ごとに、このアカウント用としてこのＰＣに保存されます。ＨＵＤの編集中は、このキーを押さずにホイールを回すとすべてのＨＵＤの表示がズームします。
-cli-help = { "Auroraビューア\u000A\u000A使い方：aurora-viewer [--title <text>] [--fps-limit <fps>] [--vr] [--language <code>] [--grid <name>]\u000A                     [--login <first> <last> <password>] [--version] [--uninstall] [<slurl>]\u000A\u000A  --title <text>   このウィンドウ（\"Auroraビューア <version> - <text>\"）とログファイル\u000A                   （aurora-<text>.log、デモモードでは aurora-demo-<text>.log）に名前を付ける\u000A  --fps-limit <fps>  初期設定を保存せずに、このプロセスを1～500 ＦＰＳに制限する\u000A  --language <code>  このプロセスのＵＩ言語を上書きする（" }{ $languages }{ "）\u000A  --grid <name>    agni、aditi、保存されたグリッド名、またはログインＵＲＩで起動する（--loginuri <uri> も可）\u000A  --login <first> <last> <password>  このアカウントですぐにログインする\u000A  <slurl>, --url <slurl>  この場所から開始する。以降の引数は読み込まれない。すでに\u000A                   起動しているビューアがあれば、そちらが受け取る\u000A  --vr             ワールドが表示されたらVRに入ります（ヘッドセット接続時）\u000A  -V, --version   起動せずにコンパイルされたビューアのバージョンを表示する\u000A  --uninstall      Auroraがフォルダの外に登録したもの（リンクハンドラ、資格情報ストア、\u000A                   Blenderアドオン）を削除し、その内容と残りのフォルダを表示して終了する\u000A  -h, --help       このヘルプを表示する\u000A\u000Aテスト用のスイッチは環境変数です（AURORA_DEMO=1、AURORA_CAPTURE=...）：\u000AREADME.md を参照してください。" }
+cli-help = { "Savageビューア\u000A\u000A使い方：aurora-viewer [--title <text>] [--fps-limit <fps>] [--vr] [--language <code>] [--grid <name>]\u000A                     [--login <first> <last> <password>] [--version] [--uninstall] [<slurl>]\u000A\u000A  --title <text>   このウィンドウ（\"Savageビューア <version> - <text>\"）とログファイル\u000A                   （aurora-<text>.log、デモモードでは aurora-demo-<text>.log）に名前を付ける\u000A  --fps-limit <fps>  初期設定を保存せずに、このプロセスを1～500 ＦＰＳに制限する\u000A  --language <code>  このプロセスのＵＩ言語を上書きする（" }{ $languages }{ "）\u000A  --grid <name>    agni、aditi、保存されたグリッド名、またはログインＵＲＩで起動する（--loginuri <uri> も可）\u000A  --login <first> <last> <password>  このアカウントですぐにログインする\u000A  <slurl>, --url <slurl>  この場所から開始する。以降の引数は読み込まれない。すでに\u000A                   起動しているビューアがあれば、そちらが受け取る\u000A  --vr             ワールドが表示されたらVRに入ります（ヘッドセット接続時）\u000A  -V, --version   起動せずにコンパイルされたビューアのバージョンを表示する\u000A  --uninstall      Auroraがフォルダの外に登録したもの（リンクハンドラ、資格情報ストア、\u000A                   Blenderアドオン）を削除し、その内容と残りのフォルダを表示して終了する\u000A  -h, --help       このヘルプを表示する\u000A\u000Aテスト用のスイッチは環境変数です（AURORA_DEMO=1、AURORA_CAPTURE=...）：\u000AREADME.md を参照してください。" }
 demo-media-page = { "data:text/html;charset=utf-8,<html><body style='margin:0;height:100vh;background:linear-gradient(135deg,%232a1f4a,%230f6d6d);color:white;font:56px sans-serif;text-align:center'><h1 style='margin:40px 0 10px'>Auroraメディア</h1><p id='t' style='font-size:90px;margin:10px'>--</p><button onclick=\"document.body.style.background='%237a3b9c';this.textContent='クリックされました！'\" style='font-size:48px;padding:10px 40px'>クリック</button><br><input placeholder='ここに記入' style='font-size:44px;margin-top:30px;width:70%'><script>setInterval(function(){document.getElementById('t').textContent=new Date().toLocaleTimeString()},250)</script></body></html>" }
 
 # Secondary labels and status messages
@@ -7857,7 +7857,7 @@ status-fps-fps = { $fps }{ "fps" }
 status-unknown = （不明）
 status-public = （公開）
 status-readme-txt = README.txt
-status-aurora-viewer-skin-theme-json-colors = { "Auroraビューアのスキン\u000A\u000Atheme.json  : 色（#RRGGBB）、角、フォントサイズ\u000Alayout.json : ツールバーのボタン（アイコン＋コマンド）、チャットのオプション\u000A（デフォルト値から始めるには *.example.json ファイルをコピーしてください）\u000Aicons/      : 組み込みのアイコンを置き換えるPNGファイル（同じファイル名）\u000A\u000Aワールド内にいる間、変更は自動的に再読み込みされます。\u000Aコマンド：help, conversations, speak, fly, mouselook, people, friends, inventory,\u000Aappearance, search, worldmap, minimap, performance, sit, home, preferences。\u000A" }
+status-aurora-viewer-skin-theme-json-colors = { "Savageビューアのスキン\u000A\u000Atheme.json  : 色（#RRGGBB）、角、フォントサイズ\u000Alayout.json : ツールバーのボタン（アイコン＋コマンド）、チャットのオプション\u000A（デフォルト値から始めるには *.example.json ファイルをコピーしてください）\u000Aicons/      : 組み込みのアイコンを置き換えるPNGファイル（同じファイル名）\u000A\u000Aワールド内にいる間、変更は自動的に再読み込みされます。\u000Aコマンド：help, conversations, speak, fly, mouselook, people, friends, inventory,\u000Aappearance, search, worldmap, minimap, performance, sit, home, preferences。\u000A" }
 status-area-m-l-price-l-m = { $value0 }{ "\u000A" }{ $area }{ "㎡　L$ " }{ $price }{ "（" }{ $value1 }{ "L$／㎡）" }
 status-days = { "日" }
 status-hours = { "時間" }
@@ -10833,7 +10833,7 @@ buy-land-can-not-change = 統合・再分割不可
 buy-land-covenant-section = 不動産約款
 buy-land-must-agree = 不動産約款に同意してください：
 buy-land-agree-covenant = 上記の約款に同意します。
-buy-land-cannot-close = Auroraビューアがこの取引の価格を見積もるまで、土地の購入ウィンドウは閉じられません。
+buy-land-cannot-close = Savageビューアがこの取引の価格を見積もるまで、土地の購入ウィンドウは閉じられません。
 buy-land-nothing-selected = 土地を購入できません：区画が選択されていません。
 buy-land-across-regions = 選択範囲が複数のリージョンにまたがっているため、土地を購入できません。より小さい範囲を選択して再試行してください。
 buy-land-only-officer = グループのために土地を購入できません：アクティブなグループのために土地を購入する権限がありません。
@@ -13122,9 +13122,9 @@ about-copied = コピーしました
 about-copy-hint = サポートへの問い合わせやバグレポート用に、上記のすべてを英語でコピーします。
 about-click-to-copy = クリックしてこの値をコピー
 about-build-pill = { $profile }ビルド
-about-third-party-viewer = Aurora Viewerはサードパーティ製のビューアです。Second Lifeの開発元であるLinden Labが提供またはサポートするものではありません。
+about-third-party-viewer = Savage ViewerはAurora Viewerをベースにしたサードパーティ製のビューアです。Second Lifeの開発元であるLinden Labが提供またはサポートするものではありません。
 about-release-notes = リリースノート
-about-licence-title = Auroraビューアのライセンス
+about-licence-title = Savageビューアのライセンス
 about-licence-gpl = GNU GPL v3
 about-source-code = ソースコード
 about-section-viewer = ビューア

@@ -1019,9 +1019,9 @@ script-experience-choose = Choisir une expérience…
 script-experiences-unavailable = Impossible de charger vos expériences. L’association actuelle est conservée ; réessayez.
 script-experience-demo = Expérience de démonstration
 script-disconnected = Connexion interrompue. La source non enregistrée est conservée ; vous pouvez la copier.
-exit-title = Fermer Aurora Viewer ?
+exit-title = Fermer Savage Viewer ?
 exit-world-body = Quitter le viewer ou revenir à l’écran de connexion ?
-exit-login-body = Voulez-vous quitter Aurora Viewer ?
+exit-login-body = Voulez-vous quitter Savage Viewer ?
 exit-waiting = Déconnexion en cours…
 exit-logout = Déconnecter
 exit-logout-hint = Terminer la session et revenir à l’écran de connexion.
@@ -1695,15 +1695,15 @@ app-aurora-elsewhere = Aurora Ailleurs
 common-aurora-demo = Aurora Démo
 demo-aurora-viewer-rust-vulkan = { "Aurora Viewer\u000ARust · Vulkan" }
 demo-aurora-viewer-rust-metal = { "Aurora Viewer\u000ARust · Metal" }
-ui-login-aurora-viewer-v = Aurora Viewer v{ $value0 }
-cli-aurora-viewer = { "Aurora Viewer " }{ $version }
-cli-aurora-viewer-2 = { "Aurora Viewer " }{ $version }{ " - " }{ $t }
-common-aurora-viewer = { "Aurora Viewer " }{ $value0 }
-app-aurora-viewer-unable-to-initialize-vulkan = { "Aurora Viewer: impossible d'initialiser Vulkan : " }{ $e }
-app-aurora-viewer-unable-to-initialize-metal = { "Aurora Viewer: impossible d'initialiser Metal : " }{ $e }
-app-graphics-start-failed-title = Aurora Viewer ne peut pas démarrer
+ui-login-aurora-viewer-v = Savage Viewer v{ $value0 }
+cli-aurora-viewer = { "Savage Viewer " }{ $version }
+cli-aurora-viewer-2 = { "Savage Viewer " }{ $version }{ " - " }{ $t }
+common-aurora-viewer = { "Savage Viewer " }{ $value0 }
+app-aurora-viewer-unable-to-initialize-vulkan = { "Savage Viewer: impossible d'initialiser Vulkan : " }{ $e }
+app-aurora-viewer-unable-to-initialize-metal = { "Savage Viewer: impossible d'initialiser Metal : " }{ $e }
+app-graphics-start-failed-title = Savage Viewer ne peut pas démarrer
 app-graphics-start-failed =
-    Aurora Viewer n'a pu ouvrir aucune carte graphique pour dessiner sa fenêtre.
+    Savage Viewer n'a pu ouvrir aucune carte graphique pour dessiner sa fenêtre.
 
     À essayer :
     • mettre à jour le pilote de la carte graphique ;
@@ -1714,7 +1714,7 @@ app-graphics-start-failed =
     Détails : { $e }
 
     Le journal de ce démarrage : { $log }
-app-gpu-stall-title = Aurora Viewer : la carte graphique ne répond plus
+app-gpu-stall-title = Savage Viewer : la carte graphique ne répond plus
 app-gpu-stall =
     La carte graphique n'a pas terminé d'image depuis { $seconds } secondes. Aurora fonctionne toujours (le monde, le son, le chat continuent) mais rien ne peut être affiché tant que la carte ne répond pas.
 
@@ -1728,7 +1728,7 @@ app-gpu-stall =
 app-gpu-recovered-title = La carte graphique a été réinitialisée
 app-gpu-recovered = Le pilote de la carte graphique a été réinitialisé (une image trop longue à dessiner, sa mémoire vidéo pleine, ou la carte prise par un autre programme). Aurora a rouvert sa fenêtre sur la carte : vous êtes resté connecté, et le monde se recharge dans un instant.
 app-gpu-recovered-safe = Le pilote de la carte graphique a de nouveau été réinitialisé en quelques minutes. Aurora a rouvert sa fenêtre avec les graphismes de secours (le niveau Potato) pour que cela ne se reproduise pas : vous êtes resté connecté. Vos réglages graphiques sont gardés : l'écran de connexion vous les propose à nouveau.
-app-gpu-lost-title = Aurora Viewer : la carte graphique a été perdue
+app-gpu-lost-title = Savage Viewer : la carte graphique a été perdue
 app-gpu-lost =
     La carte graphique a cessé de fonctionner pour Aurora : son pilote a été réinitialisé (une image trop longue à dessiner, ou sa mémoire vidéo pleine), ou la carte a été retirée ou prise par un autre programme. Plus rien ne peut être affiché : Aurora se ferme quand vous appuyez sur OK (vous êtes déconnecté proprement).
 
@@ -2433,7 +2433,7 @@ ui-options-flash-conversations-nearby-hint = Une ligne d'un résident dans le ch
 ui-options-announce-incoming-im = Annoncer les MI entrants dès que l'expéditeur commence à écrire
 ui-options-announce-incoming-im-hint = Quand un résident commence à vous écrire un MI, sa conversation s'ouvre aussitôt avec « Message entrant de » et son nom, avant l'arrivée du message.
 ui-options-unread-ims-in-window-title = Afficher le nombre de MI non lus dans le titre de la fenêtre
-ui-options-unread-ims-in-window-title-hint = Tant que des messages privés, des chats de groupe ou des conférences attendent non lus, leur nombre ouvre le titre de la fenêtre, « (3) Aurora Viewer », que la barre des tâches montre aussi.
+ui-options-unread-ims-in-window-title-hint = Tant que des messages privés, des chats de groupe ou des conférences attendent non lus, leur nombre ouvre le titre de la fenêtre, « (3) Savage Viewer », que la barre des tâches montre aussi.
 common-copy = Copie
 build-ui-features-copy-attributes = Copie les attributs
 build-ui-object-copy-object-settings-to-clipboard = Copie les paramètres de l'objet dans le presse-papiers
@@ -3885,9 +3885,9 @@ build-ui-general-next-owner = Le prochain propriétaire :
 build-ui-floaters-next-owner-can = Le prochain propriétaire peut :
 world-mod-could-not-save-the-profile = Le profil n'a pas pu être enregistré ({ $reason }).
 ui-land-general-owner-contributes-when-deeding-land = Le propriétaire contribue en cédant du terrain
-world-status-the-resident-you-messaged-has-enabled-aurora-viewer-s = Le résident auquel vous avez envoyé un message a activé le mode rejet de toutes les demandes d'amitié du client Aurora Viewer, ce qui signifie qu'il a demandé à ne pas être dérangé par les demandes d'amitié. Vous pouvez quand même lui envoyer un message privé.
-world-status-the-resident-you-messaged-has-enabled-aurora-viewer-s-2 = Le résident auquel vous avez envoyé un message a activé le mode rejet de toutes les offres ou demandes de téléportation du client Aurora Viewer, ce qui signifie qu'il a demandé à ne pas être dérangé par les offres ou demandes de téléportation. Vous pouvez quand même lui envoyer un message privé.
-world-status-the-resident-you-messaged-has-enabled-aurora-viewer-s-3 = Le résident auquel vous avez envoyé un message a activé le mode réponse automatique du client Aurora Viewer, ce qui signifie qu'il a demandé à ne pas être dérangé. Votre message sera quand même affiché dans la fenêtre de messagerie instantanée pour être consulté ultérieurement.
+world-status-the-resident-you-messaged-has-enabled-aurora-viewer-s = Le résident auquel vous avez envoyé un message a activé le mode rejet de toutes les demandes d'amitié du client Savage Viewer, ce qui signifie qu'il a demandé à ne pas être dérangé par les demandes d'amitié. Vous pouvez quand même lui envoyer un message privé.
+world-status-the-resident-you-messaged-has-enabled-aurora-viewer-s-2 = Le résident auquel vous avez envoyé un message a activé le mode rejet de toutes les offres ou demandes de téléportation du client Savage Viewer, ce qui signifie qu'il a demandé à ne pas être dérangé par les offres ou demandes de téléportation. Vous pouvez quand même lui envoyer un message privé.
+world-status-the-resident-you-messaged-has-enabled-aurora-viewer-s-3 = Le résident auquel vous avez envoyé un message a activé le mode réponse automatique du client Savage Viewer, ce qui signifie qu'il a demandé à ne pas être dérangé. Votre message sera quand même affiché dans la fenêtre de messagerie instantanée pour être consulté ultérieurement.
 world-status-the-resident-you-messaged-is-away-your-message-will = Le résident auquel vous avez envoyé un message est actuellement absent. Votre message sera affiché dans la fenêtre de messagerie instantanée pour être consulté ultérieurement.
 world-status-the-resident-you-messaged-has-blocked-all-messages-from = Le résident à qui vous avez envoyé un message a bloqué l'envoi de tout message de votre part.
 inventory-operations-the-script-contains-compilation-errors-check-the-code-and = Le script contient des erreurs de compilation. Vérifiez le code et réessayez.
@@ -4968,7 +4968,7 @@ world-mod-someone = Quelqu'un
 demo-has-anyone-seen-the-new-eep-sky = Quelqu'un a vu le nouveau ciel EEP ?
 demo-conference-invitation = Quelqu'un pour une visite de la place ?
 common-quit = Quitter
-ui-bars-quit-aurora-viewer = Quitter Aurora Viewer
+ui-bars-quit-aurora-viewer = Quitter Savage Viewer
 ui-options-camera-exit-with-mouse-wheel = Quitter avec la molette
 ui-contacts-leave-group = Quitter le groupe
 ui-contacts-leave-group-2 = Quitter le groupe '{ $n }' ?
@@ -5717,7 +5717,7 @@ ui-bars-script-library = Bibliothèque de scripts
 ui-bars-message-of-the-day = Message du jour
 ui-bars-wiki = Wiki d'Aurora Viewer
 ui-bars-knowledge-base = Base de connaissances
-ui-bars-about = À propos d'Aurora Viewer
+ui-bars-about = À propos de Savage Viewer
 cmdline-dice-successes = { "Succès: " }{ $successes }
 build-manip-south = Sud
 common-next = Suivant
@@ -7829,7 +7829,7 @@ hud-move-locked = Verrouiller le déplacement rapide
 hud-local-scale-reset = Revenir à 100 %
 hud-local-scale-forget = Oublier le réglage mémorisé
 hud-local-scale-help = Maintenez la touche des HUDs : clic gauche pour déplacer, molette pour changer la taille, Maj pour affiner. La taille est mémorisée sur ce PC par nom et créateur, pour ce compte. En édition d’un HUD, la molette sans cette touche zoome la vue de tous les HUDs.
-cli-help = { "Aurora Viewer\u000A\u000AUsage : aurora-viewer [--title <texte>] [--fps-limit <fps>] [--vr] [--language <code>] [--grid <nom>]\u000A                      [--login <prénom> <nom> <mot de passe>] [--version] [--uninstall] [<slurl>]\u000A\u000A  --title <texte>  Nomme cette fenêtre et son journal (aurora-<texte>.log,\u000A                  aurora-demo-<texte>.log en démo)\u000A  --fps-limit <fps>  Limite cette instance à 1..500 FPS sans enregistrer le réglage\u000A  --language <code>  Force la langue de cette instance (" }{ $languages }{ ")\u000A  --grid <nom>    Démarre sur agni, aditi, une grille enregistrée ou une adresse de connexion (aussi --loginuri <uri>)\u000A  --login <prénom> <nom> <mot de passe>  Se connecte tout de suite avec ce compte\u000A  <slurl>, --url <slurl>  Démarre à ce lieu ; rien n'est lu après. Un viewer déjà\u000A                  ouvert le reçoit à la place\u000A  --vr             Passer en VR dès que le monde s'affiche (casque connecté)\u000A  -V, --version   Affiche la version compilée puis quitte\u000A  --uninstall     Retire ce qu'Aurora a enregistré hors de ses dossiers (liens,\u000A                  coffre d'identifiants, module Blender), l'affiche avec les dossiers restants, puis quitte\u000A  -h, --help      Affiche cette aide\u000A\u000ALes scénarios de test utilisent des variables (AURORA_DEMO=1, AURORA_CAPTURE=...) :\u000Avoir README.md." }
+cli-help = { "Savage Viewer\u000A\u000AUsage : aurora-viewer [--title <texte>] [--fps-limit <fps>] [--vr] [--language <code>] [--grid <nom>]\u000A                      [--login <prénom> <nom> <mot de passe>] [--version] [--uninstall] [<slurl>]\u000A\u000A  --title <texte>  Nomme cette fenêtre et son journal (aurora-<texte>.log,\u000A                  aurora-demo-<texte>.log en démo)\u000A  --fps-limit <fps>  Limite cette instance à 1..500 FPS sans enregistrer le réglage\u000A  --language <code>  Force la langue de cette instance (" }{ $languages }{ ")\u000A  --grid <nom>    Démarre sur agni, aditi, une grille enregistrée ou une adresse de connexion (aussi --loginuri <uri>)\u000A  --login <prénom> <nom> <mot de passe>  Se connecte tout de suite avec ce compte\u000A  <slurl>, --url <slurl>  Démarre à ce lieu ; rien n'est lu après. Un viewer déjà\u000A                  ouvert le reçoit à la place\u000A  --vr             Passer en VR dès que le monde s'affiche (casque connecté)\u000A  -V, --version   Affiche la version compilée puis quitte\u000A  --uninstall     Retire ce qu'Aurora a enregistré hors de ses dossiers (liens,\u000A                  coffre d'identifiants, module Blender), l'affiche avec les dossiers restants, puis quitte\u000A  -h, --help      Affiche cette aide\u000A\u000ALes scénarios de test utilisent des variables (AURORA_DEMO=1, AURORA_CAPTURE=...) :\u000Avoir README.md." }
 demo-media-page = { "data:text/html;charset=utf-8,<html><body style='margin:0;height:100vh;background:linear-gradient(135deg,%232a1f4a,%230f6d6d);color:white;font:56px sans-serif;text-align:center'><h1 style='margin:40px 0 10px'>Aurora media</h1><p id='t' style='font-size:90px;margin:10px'>--</p><button onclick=\"document.body.style.background='%237a3b9c';this.textContent='Cliqu%C3%A9 !'\" style='font-size:48px;padding:10px 40px'>Cliquer</button><br><input placeholder='Taper ici' style='font-size:44px;margin-top:30px;width:70%'><script>setInterval(function(){document.getElementById('t').textContent=new Date().toLocaleTimeString()},250)</script></body></html>" }
 
 # Secondary labels and status messages
@@ -7869,7 +7869,7 @@ status-fps-fps = { $fps }{ " i/s" }
 status-unknown = (inconnu)
 status-public = (public)
 status-readme-txt = LISEZ-MOI.txt
-status-aurora-viewer-skin-theme-json-colors = { "Skin Aurora Viewer\u000A\u000Atheme.json  : couleurs (#RRGGBB), arrondis, taille des polices\u000Alayout.json : boutons de la barre d'outils (icone + commande), options du chat\u000A(copiez les fichiers *.example.json pour partir des valeurs par defaut)\u000Aicons/      : PNG qui remplacent les icones integrees (meme nom de fichier)\u000A\u000ALes modifications sont rechargees automatiquement en jeu.\u000ACommandes : help, conversations, speak, fly, mouselook, people, friends, inventory,\u000Aappearance, search, worldmap, minimap, performance, sit, home, preferences.\u000A" }
+status-aurora-viewer-skin-theme-json-colors = { "Skin Savage Viewer\u000A\u000Atheme.json  : couleurs (#RRGGBB), arrondis, taille des polices\u000Alayout.json : boutons de la barre d'outils (icone + commande), options du chat\u000A(copiez les fichiers *.example.json pour partir des valeurs par defaut)\u000Aicons/      : PNG qui remplacent les icones integrees (meme nom de fichier)\u000A\u000ALes modifications sont rechargees automatiquement en jeu.\u000ACommandes : help, conversations, speak, fly, mouselook, people, friends, inventory,\u000Aappearance, search, worldmap, minimap, performance, sit, home, preferences.\u000A" }
 status-area-m-l-price-l-m = { $value0 }{ "\u000A" }{ $area }{ " m² L$ " }{ $price }{ " (" }{ $value1 }{ " L$/m²)" }
 status-days = { " jours" }
 status-hours = { " heures" }
@@ -10845,7 +10845,7 @@ buy-land-can-not-change = Ne peut être ni fusionné ni divisé.
 buy-land-covenant-section = Règlement du domaine
 buy-land-must-agree = Vous devez accepter le règlement du domaine :
 buy-land-agree-covenant = J'accepte le règlement ci-dessus.
-buy-land-cannot-close = Vous ne pouvez pas fermer la fenêtre d'achat de terrain avant qu'Aurora Viewer ait estimé le prix de cette transaction.
+buy-land-cannot-close = Vous ne pouvez pas fermer la fenêtre d'achat de terrain avant que Savage Viewer ait estimé le prix de cette transaction.
 buy-land-nothing-selected = Impossible d'acheter le terrain : aucune parcelle sélectionnée.
 buy-land-across-regions = Impossible d'acheter le terrain : la sélection s'étend sur plusieurs régions. Sélectionnez une zone plus petite et réessayez.
 buy-land-only-officer = Impossible d'acheter le terrain pour le groupe : vous n'avez pas le droit d'acheter du terrain pour votre groupe actif.
@@ -13143,9 +13143,9 @@ about-copied = Copié
 about-copy-hint = Copie tout ce qui précède, en anglais, pour une demande d'aide ou un rapport de bug.
 about-click-to-copy = Cliquer pour copier cette valeur
 about-build-pill = Compilation { $profile }
-about-third-party-viewer = Aurora Viewer est un viewer tiers, ni fourni ni pris en charge par Linden Lab, l'éditeur de Second Life.
+about-third-party-viewer = Savage Viewer est un viewer tiers basé sur Aurora Viewer, ni fourni ni pris en charge par Linden Lab, l'éditeur de Second Life.
 about-release-notes = Notes de version
-about-licence-title = Licence d'Aurora Viewer
+about-licence-title = Licence de Savage Viewer
 about-licence-gpl = GNU GPL v3
 about-source-code = Code source
 about-section-viewer = Viewer

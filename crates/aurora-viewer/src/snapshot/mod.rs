@@ -264,6 +264,10 @@ pub struct Settings {
     /// The settings of Aurora's looks by id (`knobs`), kept when a look is
     /// taken out.
     pub look_settings: std::collections::BTreeMap<String, Vec<f32>>,
+    /// The looks stay on the world view once the photo window is closed
+    /// (`looks::live`). Savage Viewer's own: the Legacy Viewer's filters
+    /// are only laid on the photo taken.
+    pub looks_always: bool,
 }
 
 impl Default for Settings {
@@ -296,6 +300,7 @@ impl Default for Settings {
             viewfinder: Default::default(),
             looks: Vec::new(),
             look_settings: Default::default(),
+            looks_always: false,
         }
     }
 }

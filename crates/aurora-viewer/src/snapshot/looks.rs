@@ -371,6 +371,42 @@ pub struct Placement {
     pub scale: f32,
 }
 
+/// Which live view draws the looks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Live {
+    /// The photo window's: the photo's frame, the look pointed at in the
+    /// list, the before / after line.
+    Photo,
+    /// The world's, the photo window closed: the looks kept as they are,
+    /// over the whole window (`Settings::looks_always`).
+    World,
+}
+
+/// The live view that draws the looks this frame. The photo window, open,
+/// keeps its own view as it always was; closed, the world takes the looks
+/// when `always` is on and the world is shown (`in_world`: not the login
+/// screen nor the loading one).
+pub fn live(panel_open: bool, always: bool, in_world: bool) -> Option<Live> {
+    if panel_open {
+        Some(Live::Photo)
+    } else if always && in_world {
+        Some(Live::World)
+    } else {
+        None
+    }
+}
+
+/// The world's look laid over the whole `window` (pixels), as a photo of
+/// the window's size drawn at its scale; a window without a size (it is
+/// minimised) still gives a photo of one pixel.
+pub fn world_placement(window: (u32, u32)) -> Placement {
+    Placement {
+        origin: [0.0, 0.0],
+        photo: (window.0.max(1), window.1.max(1)),
+        scale: 1.0,
+    }
+}
+
 /// The layers switched on, resolved, with their strength (a table not
 /// read yet is left out this frame).
 pub fn resolve_stack(stack: &[Layer], settings: &Settings, luts: &mut LutLibrary) -> Vec<(Resolved, u8)> {
@@ -408,6 +444,37 @@ pub fn frame_look(layers: &[(Resolved, u8)], place: Placement, compare: Option<f
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_photo_window_wins_over_the_world_look() {
+        assert_eq!(live(true, false, true), Some(Live::Photo));
+        assert_eq!(live(true, true, true), Some(Live::Photo));
+        // the photo window's live view is the same before login (the
+        // offline demo, the login screen)
+        assert_eq!(live(true, true, false), Some(Live::Photo));
+    }
+
+    #[test]
+    fn the_world_look_needs_the_switch_and_the_world() {
+        assert_eq!(live(false, true, true), Some(Live::World));
+        assert_eq!(live(false, false, true), None);
+        assert_eq!(live(false, true, false), None);
+    }
+
+    #[test]
+    fn the_world_look_covers_the_window() {
+        let place = world_placement((1920, 1080));
+        assert_eq!(
+            place,
+            Placement {
+                origin: [0.0, 0.0],
+                photo: (1920, 1080),
+                scale: 1.0
+            }
+        );
+        // a minimised window has no size: never a photo of zero pixels
+        assert_eq!(world_placement((0, 0)).photo, (1, 1));
+    }
 
     #[test]
     fn every_look_has_a_name() {

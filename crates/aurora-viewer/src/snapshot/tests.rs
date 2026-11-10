@@ -2,6 +2,14 @@ use super::*;
 use std::sync::atomic::AtomicU32;
 
 #[test]
+fn looks_stay_in_the_photo_window_by_default() {
+    assert!(!Settings::default().looks_always);
+    // a settings file from before the switch existed
+    let old: Settings = serde_json::from_str("{}").expect("an empty settings object loads");
+    assert!(!old.looks_always);
+}
+
+#[test]
 fn the_viewfinder_scale_is_the_photos_height_over_the_viewfinders() {
     // an 8K photo of the window's proportions: 4 times its height
     assert_eq!(viewfinder_scale((7680, 4320), (1920, 1080), 100), 4.0);

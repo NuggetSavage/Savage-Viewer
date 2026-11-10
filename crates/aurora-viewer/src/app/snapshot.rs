@@ -8,7 +8,7 @@
 //! or a PNG posted to the profile feed (LLPanelSnapshotProfile::onSend,
 //! LLWebProfile::uploadImage).
 
-use super::App;
+use super::{App, Screen};
 use crate::snapshot::looks::{self, Placement, Resolved};
 use crate::snapshot::luts::{Imported, LutLibrary};
 use crate::snapshot::reel::Place;
@@ -1175,9 +1175,22 @@ impl App {
     /// window is open: the filter pointed at in a list, or the one chosen,
     /// over the photo's frame of the `window` (pixels; `ui::snapshot::fit`),
     /// with the viewfinder's before / after line.
+    ///
+    /// The window closed, the world keeps the looks over the whole
+    /// `window` when "Keep on in the world" is on (`looks::live`), in the
+    /// world only: the login and loading screens stay as they are.
     pub(super) fn live_look(&mut self, window: (u32, u32), focus: Option<f32>) -> Option<aurora_render::looks::PhotoLook> {
-        if !self.panels.snapshot {
-            return None;
+        let world = matches!(self.screen, Screen::World);
+        match looks::live(self.panels.snapshot, self.settings.snapshot.looks_always, world)? {
+            looks::Live::Photo => {}
+            looks::Live::World => {
+                // the looks as they are kept (none pointed at: the list is
+                // closed), over the whole window
+                let stack = self.settings.snapshot.looks.clone();
+                let settings = self.settings.snapshot.look_settings.clone();
+                let layers = looks::resolve_stack(&stack, &settings, self.photo_luts());
+                return looks::frame_look(&layers, looks::world_placement(window), None, false, focus);
+            }
         }
         let ui = &self.snapshots.ui.looks;
         let stack = looks::tried(

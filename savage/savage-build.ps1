@@ -6,13 +6,16 @@
 #   1. Checks that the viewer is not open.
 #   2. Builds the viewer (release build, the fast one to use).
 #   3. Copies the finished viewer to C:\dev\savage-viewer-app.
-# It never deletes anything; it only replaces the previous copy of the viewer.
+# It only replaces the previous copy of the viewer. The copy is named
+# savage-viewer.exe; an older copy named aurora-viewer.exe is the same viewer
+# under its old file name, and is removed once the new one is in place.
 
 $ErrorActionPreference = 'Stop'
 
 $Root = 'C:\dev\savage-viewer'
 $App = 'C:\dev\savage-viewer-app'
-$ExeName = 'aurora-viewer.exe'
+$BuiltName = 'aurora-viewer.exe'
+$ExeName = 'savage-viewer.exe'
 $LogFile = 'C:\dev\Savage-Build-log.txt'
 
 # Everything shown on screen is also written to the log file.
@@ -42,7 +45,7 @@ $minutes = 0
 try { Set-Content -LiteralPath $LogFile -Value "Savage Viewer build log, $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -Encoding ASCII } catch { }
 
 try {
-    Log 'Savage Viewer - update and build (version 1)' 'White'
+    Log 'Savage Viewer - update and build (version 2)' 'White'
     Log "Code folder:   $Root"
     Log "Viewer folder: $App"
     Log "Log file:      $LogFile"
@@ -55,7 +58,7 @@ try {
     if (-not (Test-Path -LiteralPath (Join-Path $Root '.git'))) {
         throw "The code is not in $Root yet. Run Savage-Setup.cmd first."
     }
-    if (Get-Process -Name 'aurora-viewer' -ErrorAction SilentlyContinue) {
+    if (Get-Process -Name 'aurora-viewer', 'savage-viewer' -ErrorAction SilentlyContinue) {
         throw 'The viewer is open. Close it, then run this again.'
     }
     $drive = Get-PSDrive -Name C
@@ -80,10 +83,15 @@ try {
     }
 
     Step 'Copying the viewer'
-    $built = Join-Path $Root "target\release\$ExeName"
+    $built = Join-Path $Root "target\release\$BuiltName"
     if (-not (Test-Path -LiteralPath $built)) { throw "The build finished but $built is missing." }
     New-Item -ItemType Directory -Force -Path $App | Out-Null
-    Copy-Item -LiteralPath $built -Destination $App -Force
+    Copy-Item -LiteralPath $built -Destination (Join-Path $App $ExeName) -Force
+    $old = Join-Path $App $BuiltName
+    if ((Test-Path -LiteralPath (Join-Path $App $ExeName)) -and (Test-Path -LiteralPath $old)) {
+        Remove-Item -LiteralPath $old -Force
+        Log "Removed the old copy named $BuiltName (same viewer, old file name)."
+    }
     foreach ($doc in 'LICENSE', 'NOTICE.md') {
         Copy-Item -LiteralPath (Join-Path $Root $doc) -Destination $App -Force
     }

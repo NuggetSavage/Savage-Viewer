@@ -302,6 +302,20 @@ fn quality(cx: &mut Cx) {
             .row_with(tr!("graphics-saved-title"), tr!("graphics-saved-help"), &Nothing, |ui, s, st, _| {
                 super::super::saved_graphics::controls(ui, &p, s, st)
             });
+        // Savage Viewer's own: writes the rows of the Light and Reflections
+        // tabs, which is where each of them is tracked
+        cx.keywords("Black Dragon bling shine chain").row(
+            tr!("ui-options-black-dragon-look"),
+            tr!("ui-options-black-dragon-look-help"),
+            &Nothing,
+            |ui, s| {
+                let clicked = ui.button(tr!("ui-options-black-dragon-look-apply")).clicked();
+                if clicked {
+                    crate::graphics_presets::black_dragon_look(s);
+                }
+                clicked
+            },
+        );
     });
     cx.group(tr!("ui-options-distance-and-detail"), |cx| {
         cx.slider(
@@ -688,6 +702,21 @@ fn light(cx: &mut Cx) {
             r.response.on_disabled_hover_text(tr!("ui-options-needs-hdr-emissive"));
             r.inner
         });
+        // Savage Viewer's own, after Black Dragon's RenderGlobalLightStrength
+        cx.keywords("sun moon Black Dragon RenderGlobalLightStrength").row(
+            tr!("ui-options-light-strength"),
+            tr!("ui-options-light-strength-help"),
+            &field!(light_strength),
+            |ui, s| {
+                ui.add(
+                    egui::Slider::new(&mut s.light_strength, crate::settings::LIGHT_STRENGTH_RANGE)
+                        .custom_parser(aurora_i18n::parse_number)
+                        .logarithmic(true)
+                        .trailing_fill(true),
+                )
+                .changed()
+            },
+        );
         cx.toggle(
             tr!("ui-options-glow"),
             tr!("ui-options-glow-around-glowing-faces-as-in-firestorm"),

@@ -38,12 +38,12 @@ pub const KNOWN: &[Hook] = &[
     Hook {
         file: "DiscordHook64.dll",
         program: "Discord (in-game overlay or Go Live capture)",
-        advice: "if the window turns white while the world's sound plays, turn off Discord's in-game overlay for Aurora (Discord › User Settings › Game Overlay, or the game's entry in Registered Games)",
+        advice: "if the window turns white while the world's sound plays, turn off Discord's in-game overlay for Savage Viewer (Discord › User Settings › Game Overlay, or the game's entry in Registered Games)",
     },
     Hook {
         file: "GameOverlayRenderer64.dll",
         program: "Steam overlay",
-        advice: "if the image is lost, turn off the Steam overlay for Aurora",
+        advice: "if the image is lost, turn off the Steam overlay for Savage Viewer",
     },
     Hook {
         file: "RTSSHooks64.dll",
@@ -53,7 +53,7 @@ pub const KNOWN: &[Hook] = &[
     Hook {
         file: "we-graphics-hook64.dll",
         program: "Wallpaper Engine's capture hook (a copy of OBS Studio's game capture)",
-        advice: "if the image is lost, close Wallpaper Engine or turn off its capture while Aurora runs",
+        advice: "if the image is lost, close Wallpaper Engine or turn off its capture while Savage Viewer runs",
     },
     Hook {
         file: "graphics-hook64.dll",

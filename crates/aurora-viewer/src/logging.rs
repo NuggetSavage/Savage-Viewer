@@ -501,7 +501,7 @@ pub fn init() {
         drain(DRAIN_WAIT);
     }));
     log::info!(
-        "Aurora Viewer {} starting ({} {}, {} allocator), log: {}",
+        "Savage Viewer {} starting ({} {}, {} allocator), log: {}",
         aurora_version::version(),
         std::env::consts::OS,
         std::env::consts::ARCH,

@@ -74,7 +74,7 @@ fn dictionaries() {
 /// release must not ship without its icon again.
 fn windows_resources() {
     let manifest = std::env::var("CARGO_MANIFEST_DIR").expect("Cargo supplies CARGO_MANIFEST_DIR");
-    let icon = Path::new(&manifest).join("../../assets/branding/aurora.ico");
+    let icon = Path::new(&manifest).join("../../assets/branding/savage.ico");
     println!("cargo:rerun-if-changed={}", icon.display());
 
     let display = std::env::var("DEP_AURORA_VERSION_DISPLAY").expect("aurora-version's build script supplies the version");
@@ -90,7 +90,7 @@ fn windows_resources() {
     res.set_icon(&icon.to_string_lossy())
         .set("ProductName", "Savage Viewer")
         .set("FileDescription", "Savage Viewer")
-        .set("OriginalFilename", "aurora-viewer.exe")
+        .set("OriginalFilename", "savage-viewer.exe")
         .set("ProductVersion", &display)
         .set("FileVersion", &display)
         .set_version_info(winresource::VersionInfo::PRODUCTVERSION, packed)

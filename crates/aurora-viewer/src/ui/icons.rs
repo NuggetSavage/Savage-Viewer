@@ -474,7 +474,7 @@ const FILLED: &[(&str, &[u8])] = svg_list!(
 );
 
 /// Brand SVGs (white wolf silhouette of assets/branding/), drawn untinted or tinted.
-const BRAND_SVGS: &[(&str, &[u8])] = &[("wolf", include_bytes!("../../../../assets/branding/aurora-logo-white.svg"))];
+const BRAND_SVGS: &[(&str, &[u8])] = &[("wolf", include_bytes!("../../../../assets/branding/savage-logo-white.svg"))];
 
 /// Raster images kept as PNG (brand logo).
 const PNGS: &[(&str, &[u8])] = &[("phoenix_18", include_bytes!("../../assets/icons/phoenix_18.png"))];

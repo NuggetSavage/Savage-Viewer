@@ -596,6 +596,10 @@ pub struct Settings {
     pub bloom: bool,
     /// The share of the light over the threshold it spreads (0.05 to 1).
     pub bloom_strength: f32,
+    /// Savage Viewer's own: how strong the sun and the moon light the scene,
+    /// times the sky's own (`light_strength`, 0.25 to 10; 1 leaves the sky
+    /// as it is). After Black Dragon's RenderGlobalLightStrength slider.
+    pub light_strength: f32,
     /// GPU occlusion culling: objects hidden behind others are not drawn
     /// (Firestorm UseOcclusion, on by default). Renamed from `gpu_occlusion`
     /// (off while it cost more than it saved) so that saved settings take
@@ -1518,6 +1522,26 @@ pub(crate) const FONT_SCALE_MAX: f32 = 2.0;
 /// The default strength of the bloom (half of the light over its threshold).
 pub(crate) const BLOOM_STRENGTH: f32 = 0.5;
 
+/// The light strength that leaves the sky's sun and moon as they are.
+pub(crate) const LIGHT_STRENGTH: f32 = 1.0;
+/// The range of the light strength slider.
+pub(crate) const LIGHT_STRENGTH_RANGE: std::ops::RangeInclusive<f32> = 0.25..=10.0;
+
+/// `LIGHT_STRENGTH`, for the saved profiles written before it existed.
+pub(crate) fn light_strength_default() -> f32 {
+    LIGHT_STRENGTH
+}
+
+/// The light strength a frame is drawn with: the setting held in its
+/// range, 1 for a value that is not a number.
+pub(crate) fn light_strength(setting: f32) -> f32 {
+    if setting.is_finite() {
+        setting.clamp(*LIGHT_STRENGTH_RANGE.start(), *LIGHT_STRENGTH_RANGE.end())
+    } else {
+        LIGHT_STRENGTH
+    }
+}
+
 /// RenderTonemapMix's default (settings.xml).
 pub(crate) const TONEMAP_MIX: f32 = 0.7;
 
@@ -1918,6 +1942,7 @@ impl Default for Settings {
             glow: true,
             bloom: false,
             bloom_strength: BLOOM_STRENGTH,
+            light_strength: LIGHT_STRENGTH,
             occlusion_culling: true,
             lod_factor: 2.0,
             tree_lod_factor: 0.5,
@@ -2891,6 +2916,7 @@ impl Settings {
         } else {
             BLOOM_STRENGTH
         };
+        self.light_strength = light_strength(self.light_strength);
         self.lod_factor = self.lod_factor.clamp(0.5, 4.0);
         let area = |v: f32, default: f32| if v.is_finite() { v.clamp(0.0, 1.0e6) } else { default };
         self.large_surface_prim_threshold = area(self.large_surface_prim_threshold, 75.0);

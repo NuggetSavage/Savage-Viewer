@@ -5,6 +5,54 @@ every change of ours is on `savage` and is listed here, newest first, so a
 merge of upstream knows what to keep. Upstream's `TASKS.md` is left alone:
 it is rewritten daily there and any line of ours would conflict.
 
+## 2026-11-10: Savage in every label, the SVG icon, the Black Dragon controls
+
+- **Name:** every message of the three catalogues says Savage where it
+  said Aurora (feature names included: the Savage bridge, the Savage
+  style, the Savage page of Preferences, the updater, crash and bug
+  texts, the offline demo). Kept on purpose: the About line that credits
+  Aurora Viewer (the licence asks for it), the "Aurora Team" name tag
+  (it marks upstream's developers in the world), links, and the paths of
+  the inventory folder `#Aurora/...` and of `aurora.log`, which are real
+  names on the account and on disk. The log's first line and the overlay
+  advice say Savage Viewer too.
+- **Guard:** `the_viewer_is_named_savage_viewer` now fails on any message
+  that names Aurora outside those three keys, a link or a path.
+- **Reports:** "Report a bug", the crash window and the GitHub button go to
+  this fork (`NuggetSavage/savage-viewer`), never to upstream
+  (`links.rs`, `bug_report/github.rs`, `crash/github.rs`). The in-viewer
+  direct send still uses upstream's GitHub App identifier and is expected
+  to fail on this repository; the browser route works once the fork has
+  its issues turned on.
+- **Icon:** `assets/branding/savage.ico`, `savage-logo.png`,
+  `savage-logo.svg`, `savage-logo-white.svg`, `savage-logo-black.svg`
+  (an original "SVG" letter mark, letters from Poppins Bold, OFL). The
+  program icon (`build.rs`), the window and notification logo
+  (`app.rs`, `LOGO_PNG`) and the top bar's brand mark (`ui/icons.rs`)
+  use them. Upstream's files stay in the folder, unused by the viewer.
+- **Program file:** `savage/savage-build.ps1` copies the build as
+  `savage-viewer.exe` and removes the previous copy named
+  `aurora-viewer.exe` from the viewer folder. Cargo's package and the
+  build output keep upstream's name.
+- **Light strength:** `Settings::light_strength` (0.25 to 10, 1 by
+  default; Preferences > Graphics > Light > Exposure and glow) multiplies
+  the sun or moon colour a frame is lit with (`app.rs`, `sun_color`).
+  After Black Dragon's RenderGlobalLightStrength; saved with the graphics
+  profiles (`graphics_presets::Effects::light_strength`, 1 for a profile
+  written before it).
+- **Black Dragon look:** a button (Preferences > Graphics > Quality) that
+  turns on the finest sun and projector shadows, the contact shadows,
+  SSR, HDR, glow, bloom, sharpening at 0.4 and a light strength of 2
+  (`graphics_presets::black_dragon_look`). The 2 is a starting value,
+  not a measured match.
+- **Not done:** a shadow softness slider (the penumbra is a constant of
+  `shaders/common.wgsl`), glow width and warmth, an import of Black
+  Dragon's preset files, the settings folder and credential names, the
+  inventory folder's name, Cargo's crate names.
+- **Not verified here:** type-checked and linted with the whole viewer;
+  the catalogue tests pass; the viewer's own tests were not run (this
+  workspace cannot build them) and nothing was seen on screen.
+
 ## 2026-11-09: the name shown is Savage Viewer
 
 - **What:** the window title, the login, loading and About screens, the

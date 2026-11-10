@@ -253,19 +253,16 @@ fn written(source: &str) -> Vec<(String, String)> {
 }
 
 /// Savage Viewer's own. The messages that still name upstream on purpose:
-/// its offline demo, its crash and bug reports and its updates (they are
-/// upstream's services), its team, wiki and privacy page, anything that
-/// links to its site, and the About line that credits it.
-fn names_upstream_on_purpose(key: &str, text: &str) -> bool {
-    ["demo-", "crash-", "bug-", "update-"].iter().any(|prefix| key.starts_with(prefix))
-        || [
-            "nameplate-aurora-staff-tooltip",
-            "ui-bars-wiki",
-            "ui-options-privacy-policy-hint",
-            "about-third-party-viewer",
-        ]
-        .contains(&key)
-        || text.contains("aurora-viewer.org")
+/// its team's name tag (it marks upstream's developers in the world) and
+/// the About line that credits it, which the licence asks to keep.
+fn names_upstream_on_purpose(key: &str) -> bool {
+    ["nameplate-aurora-staff", "nameplate-aurora-staff-tooltip", "about-third-party-viewer"].contains(&key)
+}
+
+/// The upstream name where it is not a label: a link, a file or folder
+/// path (the inventory folder `#Aurora/…`, `aurora.log`).
+fn is_a_path_or_link(word: &str) -> bool {
+    word.contains('/') || word.contains('\\') || word.contains("://")
 }
 
 #[test]
@@ -278,13 +275,11 @@ fn the_viewer_is_named_savage_viewer() {
             messages.len()
         );
         for (key, text) in &messages {
-            if names_upstream_on_purpose(key, text) {
+            if names_upstream_on_purpose(key) {
                 continue;
             }
-            assert!(
-                !text.contains("Aurora Viewer") && !text.contains("Auroraビューア"),
-                "{language}: {key} still names upstream's viewer: {text}"
-            );
+            let named = text.split_whitespace().any(|word| word.contains("Aurora") && !is_a_path_or_link(word));
+            assert!(!named, "{language}: {key} still names upstream: {text}");
         }
         let value = |key: &str| {
             let found = messages.iter().find(|(k, _)| k == key);

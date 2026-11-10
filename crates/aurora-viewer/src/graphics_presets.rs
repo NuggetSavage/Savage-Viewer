@@ -507,6 +507,32 @@ pub(crate) fn upgrade_tree_detail(s: &mut Settings) {
     }
 }
 
+/// Savage Viewer's "Black Dragon look": one click turns on what makes
+/// metal and jewellery shine in that viewer, with the values the two
+/// viewers share. Sun and projector shadows at their finest, the contact
+/// shadows, the screen-space reflections, the glow, the bloom and the
+/// sharpening at 0.4 (RenderShadowDetail 2, RenderScreenSpaceReflections,
+/// RenderGlow, RenderCASSharpness), and a sun twice as strong so that the
+/// highlights pass the bloom's threshold (`BLACK_DRAGON_LIGHT`, a starting
+/// value to tune by eye: Black Dragon's own scale is not this one). It
+/// leaves the distances, the details and every other setting alone.
+pub fn black_dragon_look(s: &mut Settings) {
+    s.shadow_quality = 4;
+    s.shadows = true;
+    s.projector_shadows = true;
+    s.contact_shadows = true;
+    s.ssr = true;
+    s.hdr_emissive = true;
+    s.glow = true;
+    s.bloom = true;
+    s.bloom_strength = crate::settings::BLOOM_STRENGTH;
+    s.sharpen = 0.4;
+    s.light_strength = BLACK_DRAGON_LIGHT;
+}
+
+/// The light strength of `black_dragon_look`.
+pub const BLACK_DRAGON_LIGHT: f32 = 2.0;
+
 /// Aurora's effects beyond the Legacy Viewer's levels, which High and
 /// Deluxe turn on.
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -516,6 +542,10 @@ pub struct Effects {
     pub contact_shadows: bool,
     pub screen_indirect_light: bool,
     pub screen_indirect_intensity: f32,
+    /// Savage Viewer's light strength (`Settings::light_strength`); a
+    /// profile saved before it existed holds none and reads as 1.
+    #[serde(default = "crate::settings::light_strength_default")]
+    pub light_strength: f32,
 }
 
 impl Effects {
@@ -526,6 +556,7 @@ impl Effects {
         contact_shadows: false,
         screen_indirect_light: false,
         screen_indirect_intensity: crate::settings::SCREEN_INDIRECT_INTENSITY,
+        light_strength: crate::settings::LIGHT_STRENGTH,
     };
     /// High's: the contact shadows.
     pub const HIGH: Effects = Effects {
@@ -635,6 +666,7 @@ impl Values {
             } else {
                 Effects::OFF.screen_indirect_intensity
             },
+            light_strength: round(e.light_strength, 0.05),
         };
         Values {
             draw_distance: round(self.draw_distance, 1.0),
@@ -688,6 +720,7 @@ impl Values {
                 contact_shadows: s.contact_shadows,
                 screen_indirect_light: s.screen_indirect_light,
                 screen_indirect_intensity: s.screen_indirect_intensity,
+                light_strength: s.light_strength,
             },
         }
     }
@@ -726,6 +759,7 @@ impl Values {
         s.contact_shadows = self.effects.contact_shadows;
         s.screen_indirect_light = self.effects.screen_indirect_light;
         s.screen_indirect_intensity = self.effects.screen_indirect_intensity;
+        s.light_strength = self.effects.light_strength;
     }
 }
 
@@ -1286,5 +1320,35 @@ mod tests {
         assert_eq!(Preset::from_name("Potato"), Some(Preset::Potato));
         assert_eq!(Preset::from_name(" deluxe "), Some(Preset::Deluxe));
         assert_eq!(Preset::from_name("ultra"), None);
+    }
+
+    #[test]
+    fn the_black_dragon_look_turns_the_shine_on_and_leaves_the_rest() {
+        let mut s = Settings::default();
+        Preset::Low.apply(&mut s);
+        let before = s.clone();
+        black_dragon_look(&mut s);
+        assert_eq!((s.shadow_quality, s.shadows, s.projector_shadows, s.contact_shadows), (4, true, true, true));
+        assert!(s.ssr && s.glow && s.bloom && s.hdr_emissive);
+        assert_eq!(s.light_strength, BLACK_DRAGON_LIGHT);
+        assert_eq!(s.draw_distance, before.draw_distance);
+        assert_eq!(s.lod_factor, before.lod_factor);
+        // a saved profile keeps the light strength, and one from before it reads as 1
+        let saved = serde_json::to_value(Values::read(&s)).expect("save");
+        let mut other = Settings::default();
+        serde_json::from_value::<Values>(saved.clone()).expect("restore").write(&mut other);
+        assert_eq!(other.light_strength, BLACK_DRAGON_LIGHT);
+        let mut old = saved;
+        old["effects"].as_object_mut().expect("effects").remove("light_strength");
+        assert_eq!(serde_json::from_value::<Values>(old).expect("older profile").effects.light_strength, 1.0);
+    }
+
+    #[test]
+    fn the_light_strength_stays_in_its_range() {
+        use crate::settings::light_strength;
+        assert_eq!(light_strength(1.0), 1.0);
+        assert_eq!(light_strength(0.0), 0.25);
+        assert_eq!(light_strength(50.0), 10.0);
+        assert_eq!(light_strength(f32::NAN), 1.0);
     }
 }

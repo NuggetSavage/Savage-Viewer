@@ -1,7 +1,8 @@
 //! Named quality snapshots, following LLPresetsManager::savePreset/loadPreset
 //! (indra/newview/llpresetsmanager.cpp). Only an explicit set of rendering
 //! controls is stored: never account data, environment, hardware selection,
-//! frame pacing or other preferences. The library lives in settings.json.
+//! frame pacing or other preferences. Savage Viewer adds the photo filters
+//! (`Look`). The library lives in settings.json.
 
 use crate::settings::Settings;
 
@@ -91,13 +92,22 @@ impl Look {
         }
     }
 
-    /// The settings of the looks left out of the stack stay as they are.
+    /// The settings of the looks left out of the stack stay as they are;
+    /// a look of the stack saved without settings goes back to its own
+    /// (no entry). The stack is held to what the looks window allows, as a
+    /// camera preset's is (camera::presets).
     fn write(&self, s: &mut Settings) {
         s.snapshot.looks_always = self.always;
-        s.snapshot.looks = self.layers.clone();
-        for (id, values) in &self.settings {
-            s.snapshot.look_settings.insert(id.clone(), values.clone());
+        let mut layers = self.layers.clone();
+        layers.truncate(crate::snapshot::looks::MAX_LAYERS);
+        for layer in &mut layers {
+            layer.strength = layer.strength.min(100);
+            match self.settings.get(&layer.id) {
+                Some(values) => s.snapshot.look_settings.insert(layer.id.clone(), values.clone()),
+                None => s.snapshot.look_settings.remove(&layer.id),
+            };
         }
+        s.snapshot.looks = layers;
     }
 }
 
@@ -178,10 +188,15 @@ pub fn demo(s: &mut Settings) {
     use super::Preset;
     let mut sample = Settings::default();
     Preset::Potato.apply(&mut sample);
-    s.graphics_saved.insert("My fast profile".into(), Saved::read(&sample));
+    // (no look: the demo's profiles leave its filters alone)
+    let read = |sample: &Settings| Saved {
+        look: None,
+        ..Saved::read(sample)
+    };
+    s.graphics_saved.insert("My fast profile".into(), read(&sample));
     Preset::High.apply(&mut sample);
     sample.draw_distance = 160.0;
-    let photo = Saved::read(&sample);
+    let photo = read(&sample);
     s.graphics_saved.insert("My photo profile".into(), photo.clone());
     s.graphics_saved.insert("My photo profile (copy)".into(), photo);
     select(s, "My photo profile");
@@ -389,5 +404,31 @@ mod tests {
         assert_eq!(kept.snapshot.looks, vec![layer("noir")]);
         assert!(kept.snapshot.looks_always);
         assert!(old.same_as(&kept), "its filters do not count as a change");
+
+        // a look saved without settings of its own goes back to them
+        let mut plain = Settings::default();
+        plain.snapshot.looks = vec![layer("sepia")];
+        let bare = Saved::capture(&plain);
+        plain.snapshot.look_settings.insert("sepia".into(), vec![0.7]);
+        assert!(!bare.same_as(&plain));
+        bare.apply(&mut plain);
+        assert!(!plain.snapshot.look_settings.contains_key("sepia"));
+        assert!(bare.same_as(&plain));
+
+        // a stored stack is held to what the looks window allows
+        let mut wide = Saved::capture(&Settings::default());
+        wide.look = Some(Look {
+            layers: (0..9)
+                .map(|i| Layer {
+                    strength: 250,
+                    ..layer(&format!("look{i}"))
+                })
+                .collect(),
+            ..Look::default()
+        });
+        let mut held = Settings::default();
+        wide.apply(&mut held);
+        assert_eq!(held.snapshot.looks.len(), crate::snapshot::looks::MAX_LAYERS);
+        assert!(held.snapshot.looks.iter().all(|l| l.strength == 100));
     }
 }

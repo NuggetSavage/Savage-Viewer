@@ -17,9 +17,14 @@ it is rewritten daily there and any line of ours would conflict.
   settings; the sky is not part of a profile.
 - **Photo display, key I** (`ui/viewfinder.rs`), different from upstream on
   purpose: Essential also puts the lens and aperture controls away;
-  Hidden draws nothing at all, neither the darkened margins outside the
-  photo's proportions, nor the frame, nor the "Show the interface" button.
-  A message says for 2.5 s that I brings it back.
+  Hidden no longer draws the darkened margins outside the photo's
+  proportions, the frame or the manual focus scale, and its "Show the
+  interface" button shows only with the pointer in the bottom right
+  corner. Still drawn there: the focus point while focusing, messages,
+  the last photo's card, the before/after line when compare is on. A
+  message says for 2.5 s how it comes back, each time photo mode opens
+  hidden. In Essential the bottom bar's dials stay; only the ring above
+  them and the camera pad go.
 - **Personal lighting** has the sky editor's dome to place the sun and the
   moon by hand, above their azimuth and elevation sliders
   (`ui/environment.rs`, `env_editor::sky_dome`).

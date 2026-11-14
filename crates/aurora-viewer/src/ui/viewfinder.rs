@@ -109,6 +109,9 @@ pub struct Viewfinder {
     /// The display level drawn last frame (the interface just hidden says
     /// how to show it again).
     shown_display: Option<Display>,
+    /// When the viewfinder was last drawn (`Frame::now`), to tell photo
+    /// mode opening again.
+    drawn_at: f64,
     /// The last photo's picture on its card, and the place and angle of the
     /// newest photo in the reel's tray, as drawn last frame: when the card goes,
     /// its photo flies from one to the other (started then, from there).
@@ -564,18 +567,23 @@ impl Viewfinder {
         let active = matches!(self.af.phase, Phase::Hunt | Phase::Fail) || (self.af.recent(f.now) && shows);
         if ctl {
             self.ring_deck(ctx, p, screen, s, panel, fov, f, &mut out);
-        } else if !self.menu && (manual || active || full) {
+        } else if !self.menu && ((manual && shows) || active || full) {
             self.scale(ctx, p, &front, screen, s, f);
         }
         if shows {
             self.bottom_bar(ctx, p, &back, screen, s, panel, fov, f, ctl, &mut out);
             self.dock(ctx, p, screen, s, panel, f, &mut out);
+        } else if ghost_disp(ctx, p, screen) {
+            // (Savage Viewer: shown only with the pointer in its corner)
+            s.viewfinder.display = display.next();
         }
-        // (Savage Viewer: nothing stays on a hidden display, not even
-        // upstream's button to bring it back; the key does, and the message
-        // below says so)
-        // just hidden: say how it comes back, a little longer than a
-        // setting's message
+        // photo mode just opened (no frame for a while): a display left
+        // hidden says again how it comes back
+        if f.now - self.drawn_at > 0.5 {
+            self.shown_display = None;
+        }
+        self.drawn_at = f.now;
+        // just hidden: say how it comes back
         if !shows && self.shown_display != Some(display) {
             self.message = Some((aurora_i18n::tr!("photo-vf-hidden-how").to_owned(), false, f.now + 2.5));
         }
@@ -2100,6 +2108,43 @@ fn message(ctx: &egui::Context, p: &Palette, screen: Rect, text: &str, error: bo
             });
         });
 }
+
+/// With the overlay hidden: a small DISP button to bring it back, for
+/// who has no free key for it. Savage Viewer draws it only while the
+/// pointer is in the bottom right corner (`GHOST_REACH`): a hidden display
+/// stays clean. Upstream showed it always.
+fn ghost_disp(ctx: &egui::Context, p: &Palette, screen: Rect) -> bool {
+    let id = Id::unique("vf_ghost");
+    // discreet over the photo, plain under the pointer
+    let hovered = ctx
+        .memory(|m| m.area_rect(id))
+        .zip(ctx.pointer_hover_pos())
+        .is_some_and(|(r, pos)| r.contains(pos));
+    let corner = screen.right_bottom();
+    let near = ctx
+        .pointer_hover_pos()
+        .is_some_and(|pos| (corner - pos).max_elem() <= GHOST_REACH && screen.contains(pos));
+    if !near && !hovered {
+        return false;
+    }
+    let mut clicked = false;
+    egui::Area::new(id)
+        .order(Order::Foreground)
+        .fade_in(false)
+        .pivot(Align2::RIGHT_BOTTOM)
+        .fixed_pos(screen.right_bottom() - Vec2::new(20.0, 18.0))
+        .show(ctx, |ui| {
+            ui.multiply_opacity(if hovered { 1.0 } else { 0.7 });
+            widgets::overlay(ui, p, egui::Margin::symmetric(10, 6), |ui| {
+                let text = aurora_i18n::tr!("photo-vf-show-ui");
+                clicked = icon_text_button(ui, p, "eye-filled", text, p.ink, aurora_i18n::tr!("photo-vf-disp-tip")).clicked();
+            });
+        });
+    clicked
+}
+
+/// How close to the bottom right corner the pointer shows `ghost_disp`.
+const GHOST_REACH: f32 = 160.0;
 
 /// A photo newer than `before` arrived while the last one was still `showing`
 /// (on its card or on its way to the tray).

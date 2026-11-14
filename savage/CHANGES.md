@@ -5,6 +5,28 @@ every change of ours is on `savage` and is listed here, newest first, so a
 merge of upstream knows what to keep. Upstream's `TASKS.md` is left alone:
 it is rewritten daily there and any line of ours would conflict.
 
+## 2026-11-13: profiles hold the photo filters, a clean hidden display, the sun dome
+
+- **Saved graphics profiles hold the look:** a profile now keeps the photo
+  filters with it (`graphics_presets::saved::Look`: the stack of looks,
+  the settings of the looks in it, and "Keep on in the world"), next to
+  what upstream already kept (quality, exposure, tone mapping, depth of
+  field, water effects, FSR). A profile saved before this holds no look:
+  loading it leaves the filters alone and they never mark it modified
+  (`Saved::same_as`). LUT layers are held by file name, as in the
+  settings; the sky is not part of a profile.
+- **Photo display, key I** (`ui/viewfinder.rs`), different from upstream on
+  purpose: Essential also puts the lens and aperture controls away;
+  Hidden draws nothing at all, neither the darkened margins outside the
+  photo's proportions, nor the frame, nor the "Show the interface" button.
+  A message says for 2.5 s that I brings it back.
+- **Personal lighting** has the sky editor's dome to place the sun and the
+  moon by hand, above their azimuth and elevation sliders
+  (`ui/environment.rs`, `env_editor::sky_dome`).
+- **Not verified here:** linted with the whole viewer; the viewer's tests
+  (the new profile test included) were not run, nothing was seen on
+  screen.
+
 ## 2026-11-10: Savage in every label, the SVG icon, the Black Dragon controls
 
 - **Name:** the messages of the three catalogues say Savage where they

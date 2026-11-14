@@ -524,11 +524,14 @@ impl Viewfinder {
         // the photo's proportions: the rest darkened, a fine frame, the guide
         let ratio = f.photo.0 as f32 / f.photo.1.max(1) as f32;
         let frame = panel::fit(screen, ratio);
-        for r in panel::outside(screen, frame) {
-            back.rect_filled(r, 0.0, p.navy.gamma_multiply(0.66));
+        // (Savage Viewer: hidden means a clean view, with neither the
+        // darkened margins nor the frame; upstream kept both)
+        if shows {
+            for r in panel::outside(screen, frame) {
+                back.rect_filled(r, 0.0, p.navy.gamma_multiply(0.66));
+            }
+            back.rect_stroke(frame, 0.0, Stroke::new(1.0, p.ink.gamma_multiply(0.5)), StrokeKind::Inside);
         }
-        let border = if shows { 0.5 } else { 0.25 };
-        back.rect_stroke(frame, 0.0, Stroke::new(1.0, p.ink.gamma_multiply(border)), StrokeKind::Inside);
         if shows && s.guide != Guide::None {
             panel::guide_lines(&back, frame, s.guide, p.ink.gamma_multiply(0.4));
         }
@@ -537,7 +540,9 @@ impl Viewfinder {
         }
 
         // the on-screen controls (lens ring, AF choices, camera pad)
-        let ctl = shows && !self.menu && self.controls_shown(ctx, s, screen, f.now);
+        // (Savage Viewer: Essential puts the lens and aperture controls away
+        // too; upstream kept them until Hidden)
+        let ctl = full && !self.menu && self.controls_shown(ctx, s, screen, f.now);
         let pad = ctl && s.viewfinder.pad;
         if full {
             self.top_bar(ctx, p, &back, screen, s, panel, f, &mut out);
@@ -565,13 +570,14 @@ impl Viewfinder {
         if shows {
             self.bottom_bar(ctx, p, &back, screen, s, panel, fov, f, ctl, &mut out);
             self.dock(ctx, p, screen, s, panel, f, &mut out);
-        } else if ghost_disp(ctx, p, screen) {
-            s.viewfinder.display = display.next();
         }
+        // (Savage Viewer: nothing stays on a hidden display, not even
+        // upstream's button to bring it back; the key does, and the message
+        // below says so)
         // just hidden: say how it comes back, a little longer than a
         // setting's message
         if !shows && self.shown_display != Some(display) {
-            self.message = Some((aurora_i18n::tr!("photo-vf-hidden-how").to_owned(), false, f.now + 4.5));
+            self.message = Some((aurora_i18n::tr!("photo-vf-hidden-how").to_owned(), false, f.now + 2.5));
         }
         self.shown_display = Some(display);
         if pad {
@@ -2093,30 +2099,6 @@ fn message(ctx: &egui::Context, p: &Palette, screen: Rect, text: &str, error: bo
                 ui.add(egui::Label::new(egui::RichText::new(text).size(13.0).color(color)).extend());
             });
         });
-}
-
-/// With the overlay hidden: a small DISP button to bring it back.
-fn ghost_disp(ctx: &egui::Context, p: &Palette, screen: Rect) -> bool {
-    let id = Id::unique("vf_ghost");
-    // discreet over the photo, plain under the pointer
-    let hovered = ctx
-        .memory(|m| m.area_rect(id))
-        .zip(ctx.pointer_hover_pos())
-        .is_some_and(|(r, pos)| r.contains(pos));
-    let mut clicked = false;
-    egui::Area::new(id)
-        .order(Order::Foreground)
-        .fade_in(false)
-        .pivot(Align2::RIGHT_BOTTOM)
-        .fixed_pos(screen.right_bottom() - Vec2::new(20.0, 18.0))
-        .show(ctx, |ui| {
-            ui.multiply_opacity(if hovered { 1.0 } else { 0.7 });
-            widgets::overlay(ui, p, egui::Margin::symmetric(10, 6), |ui| {
-                let text = aurora_i18n::tr!("photo-vf-show-ui");
-                clicked = icon_text_button(ui, p, "eye-filled", text, p.ink, aurora_i18n::tr!("photo-vf-disp-tip")).clicked();
-            });
-        });
-    clicked
 }
 
 /// A photo newer than `before` arrived while the last one was still `showing`

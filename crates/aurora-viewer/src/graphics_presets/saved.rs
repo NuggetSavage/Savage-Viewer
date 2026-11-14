@@ -12,24 +12,32 @@ macro_rules! quality_fields {
         pub struct Saved {
             pub quality: super::Values,
             $(pub $field: $ty,)+
+            /// Savage Viewer's own: the photo filters the profile was saved
+            /// with (`Look`). None in a profile saved before it held them:
+            /// applying that one leaves the filters as they are.
+            pub look: Option<Look>,
         }
 
         impl Default for Saved {
             fn default() -> Self {
-                Self::read(&Settings::default())
+                // (what a profile's missing fields read as: no look)
+                Self { look: None, ..Self::read(&Settings::default()) }
             }
         }
 
         impl Saved {
             #[allow(clippy::clone_on_copy)] // The allowlist mixes scalar and structured settings.
             pub fn read(s: &Settings) -> Self {
-                Self { quality: super::Values::read(s), $($field: s.$field.clone(),)+ }
+                Self { quality: super::Values::read(s), $($field: s.$field.clone(),)+ look: Some(Look::read(s)) }
             }
 
             #[allow(clippy::clone_on_copy)]
             fn write(&self, s: &mut Settings) {
                 self.quality.write(s);
                 $(s.$field = self.$field.clone();)+
+                if let Some(look) = &self.look {
+                    look.write(s);
+                }
             }
         }
     };
@@ -53,7 +61,57 @@ quality_fields! {
     fsr_sharpness: u32,
 }
 
+/// The photo filters a profile holds, so that loading it brings the whole
+/// look back as a Black Dragon preset does: the stack of looks, the
+/// settings of each, and whether they stay on the world view. LUT layers
+/// are held by the name of their file, as the settings hold them.
+#[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct Look {
+    /// `snapshot::Settings::looks_always`.
+    pub always: bool,
+    /// `snapshot::Settings::looks`.
+    pub layers: Vec<crate::snapshot::looks::Layer>,
+    /// `snapshot::Settings::look_settings`, for the looks of `layers`.
+    pub settings: std::collections::BTreeMap<String, Vec<f32>>,
+}
+
+impl Look {
+    fn read(s: &Settings) -> Self {
+        Self {
+            always: s.snapshot.looks_always,
+            layers: s.snapshot.looks.clone(),
+            settings: s
+                .snapshot
+                .look_settings
+                .iter()
+                .filter(|(id, _)| s.snapshot.looks.iter().any(|layer| &layer.id == *id))
+                .map(|(id, values)| (id.clone(), values.clone()))
+                .collect(),
+        }
+    }
+
+    /// The settings of the looks left out of the stack stay as they are.
+    fn write(&self, s: &mut Settings) {
+        s.snapshot.looks_always = self.always;
+        s.snapshot.looks = self.layers.clone();
+        for (id, values) in &self.settings {
+            s.snapshot.look_settings.insert(id.clone(), values.clone());
+        }
+    }
+}
+
 impl Saved {
+    /// Whether the profile is what `s` would save now. A profile from
+    /// before the looks were held says nothing of them: they do not count.
+    pub fn same_as(&self, s: &Settings) -> bool {
+        let mut now = Self::capture(s);
+        if self.look.is_none() {
+            now.look = None;
+        }
+        *self == now
+    }
+
     /// Photo quality temporarily raises rendering controls. Save the user's
     /// controls, just as Settings::save does, rather than those temporary ones.
     pub fn capture(s: &Settings) -> Self {
@@ -70,7 +128,11 @@ impl Saved {
         let mut quality = Settings::default();
         self.write(&mut quality);
         quality.shadows = quality.shadow_quality > 0;
-        Self::read(&quality.sanitized()).write(s);
+        let mut clean = Self::read(&quality.sanitized());
+        if self.look.is_none() {
+            clean.look = None;
+        }
+        clean.write(s);
     }
 }
 
@@ -281,5 +343,51 @@ mod tests {
         s.graphics_saved.insert("My quality".into(), user);
         s.graphics_saved_active = Some("My quality".into());
         assert!(choices(&s)[0].1);
+    }
+
+    #[test]
+    fn graphics_saved_profiles_hold_the_photo_filters_and_older_ones_leave_them_alone() {
+        use crate::snapshot::looks::Layer;
+        let layer = |id: &str| Layer {
+            id: id.into(),
+            ..Layer::default()
+        };
+        let mut s = Settings::default();
+        s.snapshot.looks = vec![layer("sepia")];
+        s.snapshot.looks_always = true;
+        s.snapshot.look_settings.insert("sepia".into(), vec![0.4]);
+        s.snapshot.look_settings.insert("unused".into(), vec![0.9]);
+        let saved = Saved::capture(&s);
+        let look = saved.look.clone().expect("a new profile holds the look");
+        assert!(look.always);
+        assert_eq!(look.layers, vec![layer("sepia")]);
+        assert_eq!(look.settings.keys().collect::<Vec<_>>(), ["sepia"], "only the stack's looks");
+        assert!(saved.same_as(&s));
+
+        // loading it brings the filters back, and keeps the other looks' settings
+        let mut other = Settings::default();
+        other.snapshot.looks = vec![layer("noir")];
+        other.snapshot.look_settings.insert("noir".into(), vec![0.2]);
+        saved.apply(&mut other);
+        assert_eq!(other.snapshot.looks, vec![layer("sepia")]);
+        assert!(other.snapshot.looks_always);
+        assert_eq!(other.snapshot.look_settings["sepia"], vec![0.4]);
+        assert_eq!(other.snapshot.look_settings["noir"], vec![0.2]);
+        assert!(saved.same_as(&other));
+        other.snapshot.looks_always = false;
+        assert!(!saved.same_as(&other), "a changed filter marks the profile modified");
+
+        // a profile saved before the looks were held: no look, filters untouched
+        let mut json = serde_json::to_value(&saved).expect("serialize");
+        json.as_object_mut().expect("object").remove("look");
+        let old: Saved = serde_json::from_value(json).expect("older profile");
+        assert!(old.look.is_none());
+        let mut kept = Settings::default();
+        kept.snapshot.looks = vec![layer("noir")];
+        kept.snapshot.looks_always = true;
+        old.apply(&mut kept);
+        assert_eq!(kept.snapshot.looks, vec![layer("noir")]);
+        assert!(kept.snapshot.looks_always);
+        assert!(old.same_as(&kept), "its filters do not count as a change");
     }
 }

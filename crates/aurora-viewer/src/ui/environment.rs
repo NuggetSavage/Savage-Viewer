@@ -374,9 +374,12 @@ impl EnvironmentUi {
             // floater_adjust_environment's sunbeacon / moonbeacon
             widgets::checkbox(ui, p, &mut self.beacons[0], aurora_i18n::tr!("ui-env-editor-sun-beacon"));
             let (mut az, mut el) = azimuth_elevation(s.sun_rotation);
+            // Savage Viewer's own: the sky editor's dome here too, to place
+            // the sun by hand (LLVirtualTrackball of floater_adjust_environment)
+            let d = super::env_editor::sky_dome(ui, p, "personal_sun_dome", &mut az, &mut el, p.amber);
             let a = slider(ui, p, aurora_i18n::tr!("ui-environment-azimuth"), &mut az, 0.0..=359.99).changed();
             let e = slider(ui, p, aurora_i18n::tr!("ui-environment-elevation"), &mut el, -90.0..=90.0).changed();
-            if a || e {
+            if d || a || e {
                 s.sun_rotation = rotation_from(az, el);
             }
             slider(ui, p, aurora_i18n::tr!("common-scale"), &mut s.sun_scale, 0.25..=20.0);
@@ -398,9 +401,10 @@ impl EnvironmentUi {
             section(ui, p, aurora_i18n::tr!("ui-environment-moon"));
             widgets::checkbox(ui, p, &mut self.beacons[1], aurora_i18n::tr!("ui-env-editor-moon-beacon"));
             let (mut az, mut el) = azimuth_elevation(s.moon_rotation);
+            let d = super::env_editor::sky_dome(ui, p, "personal_moon_dome", &mut az, &mut el, p.violet_light);
             let a = slider(ui, p, aurora_i18n::tr!("ui-environment-azimuth"), &mut az, 0.0..=359.99).changed();
             let e = slider(ui, p, aurora_i18n::tr!("ui-environment-elevation"), &mut el, -90.0..=90.0).changed();
-            if a || e {
+            if d || a || e {
                 s.moon_rotation = rotation_from(az, el);
             }
             if let Some(night) = &mut self.night {

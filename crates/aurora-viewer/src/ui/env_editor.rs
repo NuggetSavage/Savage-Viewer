@@ -1026,7 +1026,7 @@ fn xy_pad(ui: &mut egui::Ui, p: &Palette, salt: &str, v: &mut V2, range: f32, lo
 /// LLVirtualTrackball, seen from above: the zenith in the middle, the
 /// horizon on the inner ring, the nadir on the edge; east to the right,
 /// azimuth clockwise. Drag to place the sun or the moon.
-fn sky_dome(ui: &mut egui::Ui, p: &Palette, salt: &str, az: &mut f32, el: &mut f32, body: egui::Color32) -> bool {
+pub(crate) fn sky_dome(ui: &mut egui::Ui, p: &Palette, salt: &str, az: &mut f32, el: &mut f32, body: egui::Color32) -> bool {
     let enabled = ui.is_enabled();
     let side = 128.0;
     let (rect, resp) = ui.allocate_exact_size(Vec2::splat(side), if enabled { Sense::click_and_drag() } else { Sense::hover() });

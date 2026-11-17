@@ -155,13 +155,14 @@ pub fn step_roll(roll: f32, dir: i32) -> f32 {
     (roll.round() + dir.signum() as f32).clamp(-ROLL_MAX, ROLL_MAX)
 }
 
-/// What a viewfinder key does to the camera's roll (Savage Viewer): Q a
-/// step to the left, Shift + Q or E a step to the right, 0 straight
-/// (`Some(0)`); None for any other key.
+/// What a viewfinder key does to the camera's roll (Savage Viewer): Q or
+/// Shift + E a step to the left, Shift + Q or E a step to the right, 0
+/// straight (`Some(0)`); None for any other key.
 pub fn roll_key(key: char, shift: bool) -> Option<i32> {
     match key {
         'q' if shift => Some(1),
         'q' => Some(-1),
+        'e' if shift => Some(-1),
         'e' => Some(1),
         '0' => Some(0),
         _ => None,
@@ -755,6 +756,7 @@ mod tests {
         assert_eq!(roll_key('q', false), Some(-1));
         assert_eq!(roll_key('q', true), Some(1));
         assert_eq!(roll_key('e', false), Some(1));
+        assert_eq!(roll_key('e', true), Some(-1), "Shift + E is the other way from Shift + Q");
         assert_eq!(roll_key('0', false), Some(0));
         assert_eq!(roll_key('m', false), None, "Tab's menu is not a roll");
         assert_eq!(roll_key('i', true), None);

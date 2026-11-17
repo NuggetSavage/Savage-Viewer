@@ -772,8 +772,8 @@ impl App {
     /// A key while the viewfinder shows; true when it is the viewfinder's.
     /// Enter is the shutter (held: the focus); Tab the quick menu (Savage
     /// Viewer: Q rolls the camera instead, to the left, Shift + Q to the
-    /// right, a degree a press and on while held; E too, to the right, when
-    /// no shortcut has it; 0 puts it straight), I the display, N the AF mode,
+    /// right, Shift + E back to the left, a degree a press and on while held;
+    /// E alone too, to the right, when no shortcut has it; 0 puts it straight), I the display, N the AF mode,
     /// V the AF area, G the guide, H or F1 the help, 1 to 5 the focal
     /// lengths. The letters only when no shortcut of the viewer uses the
     /// key: the movement keys stay the camera's and the avatar's.
@@ -808,7 +808,9 @@ impl App {
             KeyCode::Digit3 | KeyCode::Numpad3 => Some('3'),
             KeyCode::Digit4 | KeyCode::Numpad4 => Some('4'),
             KeyCode::Digit5 | KeyCode::Numpad5 => Some('5'),
-            _ if free => letter
+            // Shift + Q and Shift + E are the roll's even when a shortcut
+            // has the bare key (E jumps): the pair works on every layout
+            _ if free || (mods.shift && matches!(letter.as_str(), "q" | "e")) => letter
                 .chars()
                 .next()
                 .filter(|c| matches!(c, 'q' | 'e' | 'i' | 'n' | 'v' | 'g' | 'h' | 'l')),

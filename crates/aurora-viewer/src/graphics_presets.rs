@@ -1336,15 +1336,15 @@ mod tests {
         assert_eq!(shadow_fine(ultra, 0, 0.0), ultra, "nothing set: the step's");
         assert_eq!(shadow_fine(ultra, 6144, 0.0), (6144, ultra.1));
         assert_eq!(shadow_fine(ultra, 0, 40.0), (ultra.0, 40.0));
-        assert_eq!(shadow_fine(ultra, 100_000, 9000.0), (6144, 512.0), "held in their ranges");
+        assert_eq!(shadow_fine(ultra, 100_000, 9000.0), (6144, 256.0), "held in their ranges");
         assert_eq!(shadow_fine(ultra, 0, f32::NAN), ultra);
-        assert_eq!(shadow_fine((0, 0.0), 6144, 300.0), (0, 0.0), "shadows off stay off");
+        assert_eq!(shadow_fine((0, 0.0), 6144, 200.0), (0, 0.0), "shadows off stay off");
 
         let mut s = Settings::default();
         Preset::High.apply(&mut s);
         s.shadow_resolution = 6144;
-        s.shadow_distance = 300.0;
-        assert_eq!(s.shadow_params(), (6144, 300.0));
+        s.shadow_distance = 200.0;
+        assert_eq!(s.shadow_params(), (6144, 200.0));
         assert_eq!(Preset::matching(&s), Some(Preset::High), "they are no level's");
         // a saved profile brings them back; a level puts the step's back
         let saved = saved::Saved::capture(&s);
@@ -1352,7 +1352,7 @@ mod tests {
         assert_eq!((s.shadow_resolution, s.shadow_distance), (0, 0.0));
         assert_eq!(s.shadow_params(), Settings::shadow_params_of(s.shadow_quality));
         saved.apply(&mut s);
-        assert_eq!(s.shadow_params(), (6144, 300.0));
+        assert_eq!(s.shadow_params(), (6144, 200.0));
     }
 
     #[test]

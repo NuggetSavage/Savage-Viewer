@@ -599,15 +599,24 @@ fn light(cx: &mut Cx) {
                 tr!("ui-options-shadow-resolution-help"),
                 &field!(shadow_resolution),
                 |ui, s| {
-                    let mut value = s.shadow_params().0;
-                    let changed = ui
-                        .add(
-                            egui::Slider::new(&mut value, crate::settings::SHADOW_RESOLUTION)
-                                .step_by(64.0)
-                                .custom_parser(aurora_i18n::parse_number)
-                                .trailing_fill(true),
-                        )
-                        .changed();
+                    // every value builds a new shadow atlas (hundreds of MiB
+                    // at the top): the setting takes the value once the
+                    // slider is let go, not along the drag
+                    let id = egui::Id::unique("savage_shadow_resolution_drag");
+                    let held: Option<u32> = ui.data(|d| d.get_temp(id));
+                    let mut value = held.unwrap_or(s.shadow_params().0);
+                    let resp = ui.add(
+                        egui::Slider::new(&mut value, crate::settings::SHADOW_RESOLUTION)
+                            .step_by(64.0)
+                            .custom_parser(aurora_i18n::parse_number)
+                            .trailing_fill(true),
+                    );
+                    if resp.dragged() {
+                        ui.data_mut(|d| d.insert_temp(id, value));
+                        return false;
+                    }
+                    ui.data_mut(|d| d.remove_temp::<u32>(id));
+                    let changed = (held.is_some() || resp.changed()) && value != s.shadow_params().0;
                     if changed {
                         s.shadow_resolution = value;
                     }

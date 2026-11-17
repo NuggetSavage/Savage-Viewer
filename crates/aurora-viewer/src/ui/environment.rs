@@ -62,6 +62,9 @@ pub struct EnvironmentUi {
     confirm_reset: bool,
     /// The sun and moon beacons of "Personal lighting" (kept by the app).
     pub beacons: [bool; 2],
+    /// Drawn over the photo viewfinder, which shows neither the environment
+    /// picker nor the sky editor: the buttons that open them stay away.
+    pub over_viewfinder: bool,
     /// Where the real night sky is seen from (kept by the app in the
     /// settings; `None` with the Legacy Viewer's stars).
     pub night: Option<NightSkyPick>,
@@ -420,21 +423,24 @@ impl EnvironmentUi {
             // Savage Viewer's own: the way from here to a saved sky. The
             // picker loads one of the inventory; the sky editor opens on
             // the sky shown, with the rights of its source, and its Save
-            // as asks for the name (App::open_env_editor_snapshot).
-            ui.horizontal(|ui| {
-                if widgets::flat_button(ui, p, aurora_i18n::tr!("ui-environment-load-sky"))
-                    .on_hover_text(aurora_i18n::tr!("ui-environment-load-sky-tip"))
-                    .clicked()
-                {
-                    out = Some(EnvAction::Picker);
-                }
-                if widgets::flat_button(ui, p, aurora_i18n::tr!("ui-environment-edit-save-sky"))
-                    .on_hover_text(aurora_i18n::tr!("ui-environment-edit-save-sky-tip"))
-                    .clicked()
-                {
-                    out = Some(EnvAction::EditSky);
-                }
-            });
+            // as asks for the name (App::open_env_editor_snapshot). Not over
+            // the photo viewfinder, which draws neither of the two.
+            if !self.over_viewfinder {
+                ui.horizontal(|ui| {
+                    if widgets::flat_button(ui, p, aurora_i18n::tr!("ui-environment-load-sky"))
+                        .on_hover_text(aurora_i18n::tr!("ui-environment-load-sky-tip"))
+                        .clicked()
+                    {
+                        out = Some(EnvAction::Picker);
+                    }
+                    if widgets::flat_button(ui, p, aurora_i18n::tr!("ui-environment-edit-save-sky"))
+                        .on_hover_text(aurora_i18n::tr!("ui-environment-edit-save-sky-tip"))
+                        .clicked()
+                    {
+                        out = Some(EnvAction::EditSky);
+                    }
+                });
+            }
             ui.horizontal(|ui| {
                 if self.confirm_reset {
                     ui.label(

@@ -69,7 +69,7 @@ try {
         Step 'Code being built'
         # version tags (v0.2.0...) give the viewer its number; a failure
         # here only means the number may read 0.0.0
-        Run 'git fetch --tags --quiet origin' | Out-Null
+        Run 'git fetch --tags --force --quiet origin' | Out-Null
         Run 'git status --short --branch' | Out-Null
         Run 'git log -1 --oneline' | Out-Null
 
@@ -103,17 +103,23 @@ try {
     # A copy of every viewer built, by version, to go back to an older one
     # without rebuilding: open the older file. Nothing is removed from here.
     Step 'Keeping a copy of this version'
-    $line = [string](& (Join-Path $App $ExeName) --version | Select-Object -First 1)
-    if ($line -match '(\d+\.\d+\.\d+[0-9A-Za-z.+-]*)') {
-        $version = $Matches[1]
-        $versions = Join-Path $App 'versions'
-        New-Item -ItemType Directory -Force -Path $versions | Out-Null
-        $kept = Join-Path $versions "savage-viewer-$version.exe"
-        Copy-Item -LiteralPath (Join-Path $App $ExeName) -Destination $kept -Force
-        Log "Version $version kept as $kept"
+    try {
+        $line = [string](& (Join-Path $App $ExeName) --version | Select-Object -First 1)
+        if ($line -match '(\d+\.\d+\.\d+[0-9A-Za-z.+-]*)') {
+            $version = $Matches[1]
+            $versions = Join-Path $App 'versions'
+            New-Item -ItemType Directory -Force -Path $versions | Out-Null
+            $kept = Join-Path $versions "savage-viewer-$version.exe"
+            Copy-Item -LiteralPath (Join-Path $App $ExeName) -Destination $kept -Force
+            Log "Version $version kept as $kept"
+        }
+        else {
+            Log "Could not read the version from '$line'; no copy kept." 'Yellow'
+        }
     }
-    else {
-        Log "Could not read the version from '$line'; no copy kept." 'Yellow'
+    catch {
+        # the viewer itself is built and in place: this copy is only a spare
+        Log "No copy kept: $($_.Exception.Message)" 'Yellow'
     }
 
     $ok = $true

@@ -15367,7 +15367,9 @@ impl App {
                         let screen = ctx.content_rect();
                         ui::layout::set_work_area(&ctx, screen);
                         ui::layout::set_move_area(&ctx, screen);
+                        self.env_ui.over_viewfinder = true;
                         let reset = self.personal_lighting(&ctx, &p, true);
+                        self.env_ui.over_viewfinder = false;
                         self.env_actions(reset);
                     }
                     // the exit's question still shows over the photo mode

@@ -20,7 +20,7 @@ it is rewritten daily there and any line of ours would conflict.
   its switches, the Help menu's line, the login screen's button. The
   crash window's own link is unchanged.
 - **Shadows by hand:** `Settings::shadow_resolution` (1024 to 6144) and
-  `shadow_distance` (16 to 512 m) ride over the shadow quality's step
+  `shadow_distance` (16 to 256 m, as far as the scene keeps shadow casters) ride over the shadow quality's step
   (`settings::shadow_fine`; 0 follows the step). Preferences > Graphics >
   Light, under Shadow quality. Choosing a quality step or a graphics level
   puts the step's values back; saved profiles keep them. After Black

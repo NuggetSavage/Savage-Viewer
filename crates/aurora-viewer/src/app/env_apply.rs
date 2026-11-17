@@ -222,7 +222,12 @@ impl App {
                 }
                 EnvAction::Preset(n) => self.panels.time_of_day = n,
                 EnvAction::Picker => self.panels.environment = true,
-                EnvAction::EditSky => self.open_env_editor_snapshot(crate::world::env_select::SettingsKind::Sky),
+                EnvAction::EditSky => {
+                    // the editor's sky goes over the personal one: its
+                    // window takes over from this one
+                    self.panels.personal_lighting = false;
+                    self.open_env_editor_snapshot(crate::world::env_select::SettingsKind::Sky);
+                }
             }
         }
     }

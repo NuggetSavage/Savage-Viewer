@@ -601,7 +601,7 @@ pub struct Settings {
     /// follows the shadow quality's step (`shadow_fine`).
     pub shadow_resolution: u32,
     /// Savage Viewer's own: how far the shadows reach, set by hand (16 to
-    /// 512 m, RenderShadowDistance); 0 follows the quality's step.
+    /// 256 m, RenderShadowDistance); 0 follows the quality's step.
     pub shadow_distance: f32,
     /// Savage Viewer's own: how strong the sun and the moon light the scene,
     /// times the sky's own (`light_strength`, 0.25 to 10; 1 leaves the sky
@@ -1531,8 +1531,10 @@ pub(crate) const BLOOM_STRENGTH: f32 = 0.5;
 
 /// The range of the shadow resolution set by hand, per cascade.
 pub(crate) const SHADOW_RESOLUTION: std::ops::RangeInclusive<u32> = 1024..=6144;
-/// The range of the shadow distance set by hand, in metres.
-pub(crate) const SHADOW_DISTANCE: std::ops::RangeInclusive<f32> = 16.0..=512.0;
+/// The range of the shadow distance set by hand, in metres. No further
+/// than the scene keeps its shadow casters (`Scene`'s `shadow_dist`, the
+/// draw distance up to 256 m): beyond, the cascades would only thin out.
+pub(crate) const SHADOW_DISTANCE: std::ops::RangeInclusive<f32> = 16.0..=256.0;
 
 /// The shadows' (resolution, distance): `step`, the quality's own, with
 /// the values set by hand over it (0 leaves the step's). Shadows that are

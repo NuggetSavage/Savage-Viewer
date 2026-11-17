@@ -1063,7 +1063,11 @@ impl<'a> Cx<'a> {
             self.ui.painter().galley(label_pos, galley.clone(), ink);
         }
         if !hint.is_empty() {
-            self.ui.interact(label_rect, id.with("label"), Sense::hover()).on_hover_text(hint);
+            // (Savage Viewer: the description shows over the whole row, its
+            // control too, not over the label alone as upstream; a hover
+            // takes nothing from the control under it)
+            let over = if section_body { label_rect } else { row };
+            self.ui.interact(over, id.with("label"), Sense::hover()).on_hover_text(hint);
         }
         let mut after = label_rect.right() + 6.0;
         if next.experimental {

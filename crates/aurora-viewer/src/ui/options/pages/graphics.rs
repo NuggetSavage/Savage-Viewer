@@ -599,24 +599,38 @@ fn light(cx: &mut Cx) {
                 tr!("ui-options-shadow-resolution-help"),
                 &field!(shadow_resolution),
                 |ui, s| {
-                    // every value builds a new shadow atlas (hundreds of MiB
-                    // at the top): the setting takes the value once the
-                    // slider is let go, not along the drag
+                    // the shadows follow the slider along the drag, like
+                    // Exposure. Every value builds a new shadow atlas
+                    // (hundreds of MiB at the top), so a drag hands one over
+                    // at most every SHADOW_DRAG_STEP seconds, and the value
+                    // let go is always applied
+                    const SHADOW_DRAG_STEP: f64 = 0.12;
                     let id = egui::Id::unique("savage_shadow_resolution_drag");
-                    let held: Option<u32> = ui.data(|d| d.get_temp(id));
-                    let mut value = held.unwrap_or(s.shadow_params().0);
+                    let held: Option<(u32, f64)> = ui.data(|d| d.get_temp(id));
+                    let mut value = held.map_or(s.shadow_params().0, |(v, _)| v);
                     let resp = ui.add(
                         egui::Slider::new(&mut value, crate::settings::SHADOW_RESOLUTION)
                             .step_by(64.0)
                             .custom_parser(aurora_i18n::parse_number)
                             .trailing_fill(true),
                     );
+                    let differs = value != s.shadow_params().0;
                     if resp.dragged() {
-                        ui.data_mut(|d| d.insert_temp(id, value));
-                        return false;
+                        let now = ui.input(|i| i.time);
+                        let last = held.map_or(f64::NEG_INFINITY, |(_, at)| at);
+                        let due = differs && now - last >= SHADOW_DRAG_STEP;
+                        ui.data_mut(|d| d.insert_temp(id, (value, if due { now } else { last })));
+                        if due {
+                            s.shadow_resolution = value;
+                        } else if differs {
+                            // a pointer held still sends no event: come back
+                            // for the value it stopped on
+                            ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(SHADOW_DRAG_STEP));
+                        }
+                        return due;
                     }
-                    ui.data_mut(|d| d.remove_temp::<u32>(id));
-                    let changed = (held.is_some() || resp.changed()) && value != s.shadow_params().0;
+                    ui.data_mut(|d| d.remove_temp::<(u32, f64)>(id));
+                    let changed = (held.is_some() || resp.changed()) && differs;
                     if changed {
                         s.shadow_resolution = value;
                     }

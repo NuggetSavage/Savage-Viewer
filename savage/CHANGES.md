@@ -5,6 +5,12 @@ every change of ours is on `savage` and is listed here, newest first, so a
 merge of upstream knows what to keep. Upstream's `TASKS.md` is left alone:
 it is rewritten daily there and any line of ours would conflict.
 
+## 2026-11-16: version 0.2.1 (shadow resolution follows the drag)
+
+- `ui/options/pages/graphics.rs`: the Shadow resolution slider hands its
+  value over along the drag, at most every 0.12 s (`SHADOW_DRAG_STEP`), and
+  always on release. 0.2.0 applied it on release only. Not seen on screen.
+
 ## 2026-11-16: version 0.2.0 (shadow sliders, roll keys, sky buttons, no bug button, versions)
 
 - **Versions:** `savage/VERSION` holds the number of the code (0.2.0).

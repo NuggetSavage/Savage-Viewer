@@ -5,6 +5,15 @@ bar and in About. Each version below names its commit on GitHub (branch
 `savage`), which is the exact code of that version, and the build keeps a
 copy of each viewer in `C:\dev\savage-viewer-app\versions`.
 
+## 0.2.1 (2026-11-16)
+
+Commit: the one titled "Version 0.2.1" on GitHub.
+
+Changed
+- Shadow resolution: the shadows now follow the slider while you drag it,
+  like Exposure, instead of waiting until you let go. To keep the drag
+  smooth, the shadow map is rebuilt about 8 times a second while dragging.
+
 ## 0.2.0 (2026-11-16)
 
 Commit: the one titled "Version 0.2.0" on GitHub (it sets `savage/VERSION`).

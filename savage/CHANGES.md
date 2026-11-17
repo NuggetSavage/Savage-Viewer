@@ -5,6 +5,16 @@ every change of ours is on `savage` and is listed here, newest first, so a
 merge of upstream knows what to keep. Upstream's `TASKS.md` is left alone:
 it is rewritten daily there and any line of ours would conflict.
 
+## 2026-11-17: version 0.2.2 (Shift + E roll, camera pad in Essential, row descriptions)
+
+- `snapshot/viewfinder.rs` `roll_key`: Shift + E is -1. `app/viewfinder.rs`:
+  Shift + Q and Shift + E reach `roll_key` even when a shortcut has the bare
+  key (E is Jump).
+- `ui/viewfinder.rs`: the camera pad shows in every display but Hidden
+  (upstream: Full only).
+- `ui/options/cx.rs` `draw_row`: the hint's hover area is the whole row
+  (upstream: the label).
+
 ## 2026-11-16: version 0.2.1 (shadow resolution follows the drag)
 
 - `ui/options/pages/graphics.rs`: the Shadow resolution slider hands its

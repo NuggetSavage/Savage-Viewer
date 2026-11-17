@@ -550,6 +550,11 @@ impl Viewfinder {
         // switch is on the dock, which Essential keeps)
         let on_screen = shows && !self.menu && self.controls_shown(ctx, s, screen, f.now);
         let ctl = full && on_screen;
+        if !ctl {
+            // a ring drag left open by a change of display would keep the
+            // controls, the pad with them, from fading
+            self.ring_drag = None;
+        }
         let pad = on_screen && s.viewfinder.pad;
         if full {
             self.top_bar(ctx, p, &back, screen, s, panel, f, &mut out);

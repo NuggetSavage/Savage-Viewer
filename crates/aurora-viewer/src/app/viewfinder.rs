@@ -809,8 +809,9 @@ impl App {
             KeyCode::Digit4 | KeyCode::Numpad4 => Some('4'),
             KeyCode::Digit5 | KeyCode::Numpad5 => Some('5'),
             // Shift + Q and Shift + E are the roll's even when a shortcut
-            // has the bare key (E jumps): the pair works on every layout
-            _ if free || (mods.shift && matches!(letter.as_str(), "q" | "e")) => letter
+            // has the bare key (E jumps). By the key's place, as the bound
+            // check is: on AZERTY the key that types Q is the strafe's
+            _ if free || (mods.shift && matches!(code, KeyCode::KeyQ | KeyCode::KeyE)) => letter
                 .chars()
                 .next()
                 .filter(|c| matches!(c, 'q' | 'e' | 'i' | 'n' | 'v' | 'g' | 'h' | 'l')),

@@ -5,6 +5,20 @@ bar and in About. Each version below names its commit on GitHub (branch
 `savage`), which is the exact code of that version, and the build keeps a
 copy of each viewer in `C:\dev\savage-viewer-app\versions`.
 
+## 0.2.2 (2026-11-17)
+
+Commit: the one titled "Version 0.2.2" on GitHub.
+
+Added
+- Photo mode: Shift + E rolls the camera the opposite way from Shift + Q.
+  It works even though E alone is the Jump key.
+
+Changed
+- Photo mode: the camera pad (gamepad button on the right bar) now stays
+  on screen in the Essential display. The Hidden display still hides it.
+- Preferences: a setting's description now shows when the pointer rests
+  anywhere on its row, including the slider or switch, not only on the label.
+
 ## 0.2.1 (2026-11-16)
 
 Commit: the one titled "Version 0.2.1" on GitHub.

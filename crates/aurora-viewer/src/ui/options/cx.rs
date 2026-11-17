@@ -1062,18 +1062,20 @@ impl<'a> Cx<'a> {
         if !section_body {
             self.ui.painter().galley(label_pos, galley.clone(), ink);
         }
-        if !hint.is_empty() {
-            // (Savage Viewer: the description shows over the whole row, its
-            // control too, not over the label alone as upstream; a hover
-            // takes nothing from the control under it)
-            let over = if section_body { label_rect } else { row };
-            self.ui.interact(over, id.with("label"), Sense::hover()).on_hover_text(hint);
-        }
         let mut after = label_rect.right() + 6.0;
         if next.experimental {
             let mark = Rect::from_center_size(pos2(after + 6.5, label_rect.center().y), Vec2::splat(13.0));
             crate::ui::widgets::experimental_mark(self.ui, &p, mark, id.with("experimental"));
             after += 19.0;
+        }
+        if !hint.is_empty() {
+            // (Savage Viewer: the description shows over the whole row, its
+            // control too, not over the label alone as upstream; a hover
+            // takes nothing from the control under it. After the
+            // experimental mark, which sits in the row: a layer shows one
+            // tooltip, the first asked, and the mark keeps its own)
+            let over = if section_body { label_rect } else { row };
+            self.ui.interact(over, id.with("label"), Sense::hover()).on_hover_text(hint);
         }
         if search {
             let go = Rect::from_center_size(pos2(after + 10.0, label_rect.center().y), Vec2::splat(22.0));

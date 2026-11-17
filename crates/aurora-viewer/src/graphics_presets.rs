@@ -292,6 +292,9 @@ impl Preset {
             ..level
         }
         .write(s);
+        // (a level is its steps: the shadow values set by hand follow it)
+        s.shadow_resolution = 0;
+        s.shadow_distance = 0.0;
         s.graphics_saved_active = None;
     }
 
@@ -512,32 +515,6 @@ pub(crate) fn upgrade_tree_detail(s: &mut Settings) {
         }
     }
 }
-
-/// Savage Viewer's "Black Dragon look": one click turns on what makes
-/// metal and jewellery shine in that viewer, with the values the two
-/// viewers share. Sun and projector shadows at their finest, the contact
-/// shadows, the screen-space reflections, the glow, the bloom and the
-/// sharpening at 0.4 (RenderShadowDetail 2, RenderScreenSpaceReflections,
-/// RenderGlow, RenderCASSharpness), and a sun twice as strong so that the
-/// highlights pass the bloom's threshold (`BLACK_DRAGON_LIGHT`, a starting
-/// value to tune by eye: Black Dragon's own scale is not this one). It
-/// leaves the distances, the details and every other setting alone.
-pub fn black_dragon_look(s: &mut Settings) {
-    s.shadow_quality = 4;
-    s.shadows = true;
-    s.projector_shadows = true;
-    s.contact_shadows = true;
-    s.ssr = true;
-    s.hdr_emissive = true;
-    s.glow = true;
-    s.bloom = true;
-    s.bloom_strength = crate::settings::BLOOM_STRENGTH;
-    s.sharpen = 0.4;
-    s.light_strength = BLACK_DRAGON_LIGHT;
-}
-
-/// The light strength of `black_dragon_look`.
-pub const BLACK_DRAGON_LIGHT: f32 = 2.0;
 
 /// Aurora's effects beyond the Legacy Viewer's levels, which High and
 /// Deluxe turn on.
@@ -1330,35 +1307,52 @@ mod tests {
     }
 
     #[test]
-    fn the_black_dragon_look_turns_the_shine_on_and_leaves_the_rest() {
-        let mut s = Settings::default();
-        Preset::Low.apply(&mut s);
-        let before = s.clone();
-        black_dragon_look(&mut s);
-        assert_eq!(
-            (s.shadow_quality, s.shadows, s.projector_shadows, s.contact_shadows),
-            (4, true, true, true)
-        );
-        assert!(s.ssr && s.glow && s.bloom && s.hdr_emissive);
-        assert_eq!(s.light_strength, BLACK_DRAGON_LIGHT);
-        assert_eq!(s.draw_distance, before.draw_distance);
-        assert_eq!(s.lod_factor, before.lod_factor);
+    fn the_light_strength_is_no_levels_and_saved_profiles_keep_it() {
+        let mut s = Settings {
+            light_strength: 2.5,
+            ..Settings::default()
+        };
         // a level leaves the light strength alone and still reads as itself
         Preset::High.apply(&mut s);
-        assert_eq!(s.light_strength, BLACK_DRAGON_LIGHT);
+        assert_eq!(s.light_strength, 2.5);
         assert_eq!(Preset::matching(&s), Some(Preset::High));
-        black_dragon_look(&mut s);
-        // a saved profile keeps the light strength, and one from before it reads as 1
+        // a saved profile keeps it, and one from before it reads as 1
         let saved = serde_json::to_value(Values::read(&s)).expect("save");
         let mut other = Settings::default();
         serde_json::from_value::<Values>(saved.clone()).expect("restore").write(&mut other);
-        assert_eq!(other.light_strength, BLACK_DRAGON_LIGHT);
+        assert_eq!(other.light_strength, 2.5);
         let mut old = saved;
         old["effects"].as_object_mut().expect("effects").remove("light_strength");
         assert_eq!(
             serde_json::from_value::<Values>(old).expect("older profile").effects.light_strength,
             1.0
         );
+    }
+
+    #[test]
+    fn the_shadow_values_set_by_hand_ride_over_the_step_and_follow_a_level() {
+        use crate::settings::shadow_fine;
+        let ultra = Settings::shadow_params_of(4);
+        assert_eq!(shadow_fine(ultra, 0, 0.0), ultra, "nothing set: the step's");
+        assert_eq!(shadow_fine(ultra, 6144, 0.0), (6144, ultra.1));
+        assert_eq!(shadow_fine(ultra, 0, 40.0), (ultra.0, 40.0));
+        assert_eq!(shadow_fine(ultra, 100_000, 9000.0), (6144, 512.0), "held in their ranges");
+        assert_eq!(shadow_fine(ultra, 0, f32::NAN), ultra);
+        assert_eq!(shadow_fine((0, 0.0), 6144, 300.0), (0, 0.0), "shadows off stay off");
+
+        let mut s = Settings::default();
+        Preset::High.apply(&mut s);
+        s.shadow_resolution = 6144;
+        s.shadow_distance = 300.0;
+        assert_eq!(s.shadow_params(), (6144, 300.0));
+        assert_eq!(Preset::matching(&s), Some(Preset::High), "they are no level's");
+        // a saved profile brings them back; a level puts the step's back
+        let saved = saved::Saved::capture(&s);
+        Preset::High.apply(&mut s);
+        assert_eq!((s.shadow_resolution, s.shadow_distance), (0, 0.0));
+        assert_eq!(s.shadow_params(), Settings::shadow_params_of(s.shadow_quality));
+        saved.apply(&mut s);
+        assert_eq!(s.shadow_params(), (6144, 300.0));
     }
 
     #[test]

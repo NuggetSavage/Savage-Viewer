@@ -386,6 +386,9 @@ pub fn top(
 /// Preferences › Interface ("Report a bug in the top bar", on by default
 /// during the alpha).
 fn menu_options(resp: &egui::Response, p: &Palette, st: &StatusInfo, action: &mut BarAction) {
+    if !crate::links::BUG_REPORTS {
+        return;
+    }
     menu::context_menu_of_button(resp, p, |ui| {
         if menu::check(ui, p, "bug-filled", aurora_i18n::tr!("bug-toolbar"), st.show_bug_report, true) {
             *action = BarAction::ShowBugButton(!st.show_bug_report);

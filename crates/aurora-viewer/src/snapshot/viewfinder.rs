@@ -155,6 +155,19 @@ pub fn step_roll(roll: f32, dir: i32) -> f32 {
     (roll.round() + dir.signum() as f32).clamp(-ROLL_MAX, ROLL_MAX)
 }
 
+/// What a viewfinder key does to the camera's roll (Savage Viewer): Q a
+/// step to the left, Shift + Q or E a step to the right, 0 straight
+/// (`Some(0)`); None for any other key.
+pub fn roll_key(key: char, shift: bool) -> Option<i32> {
+    match key {
+        'q' if shift => Some(1),
+        'q' => Some(-1),
+        'e' => Some(1),
+        '0' => Some(0),
+        _ => None,
+    }
+}
+
 /// The viewfinder's settings kept between sessions (the rest of the photo
 /// is `snapshot::Settings`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -736,6 +749,22 @@ fn wav(samples: Vec<f32>) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn q_and_e_roll_the_camera_and_zero_puts_it_straight() {
+        assert_eq!(roll_key('q', false), Some(-1));
+        assert_eq!(roll_key('q', true), Some(1));
+        assert_eq!(roll_key('e', false), Some(1));
+        assert_eq!(roll_key('0', false), Some(0));
+        assert_eq!(roll_key('m', false), None, "Tab's menu is not a roll");
+        assert_eq!(roll_key('i', true), None);
+        // a held key walks a degree a repeat, and stops at the half turn
+        let mut roll = 0.0;
+        for _ in 0..500 {
+            roll = step_roll(roll, roll_key('q', false).unwrap_or(0));
+        }
+        assert_eq!(roll, -ROLL_MAX);
+    }
 
     #[test]
     fn the_beep_is_two_tones_with_silence_between() {

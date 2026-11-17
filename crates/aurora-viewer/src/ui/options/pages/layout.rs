@@ -9,7 +9,9 @@ pub fn page(cx: &mut Cx, tab: usize) {
     match tab {
         0 => {
             cx.group(tr!("ui-options-bars"), |cx| {
-                cx.toggle(tr!("bug-toolbar"), tr!("bug-toolbar-help"), &field!(show_bug_report));
+                if crate::links::BUG_REPORTS {
+                    cx.toggle(tr!("bug-toolbar"), tr!("bug-toolbar-help"), &field!(show_bug_report));
+                }
                 // the place island of the Aurora bars (also in its right-click menu)
                 cx.toggle(
                     tr!("ui-options-place-bar-stretch"),

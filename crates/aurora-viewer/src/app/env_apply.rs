@@ -221,6 +221,8 @@ impl App {
                     self.panels.time_of_day = 0;
                 }
                 EnvAction::Preset(n) => self.panels.time_of_day = n,
+                EnvAction::Picker => self.panels.environment = true,
+                EnvAction::EditSky => self.open_env_editor_snapshot(crate::world::env_select::SettingsKind::Sky),
             }
         }
     }

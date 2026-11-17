@@ -28,6 +28,12 @@ pub enum EnvAction {
     Shared,
     /// A time of day preset (1..=4).
     Preset(u8),
+    /// Savage Viewer's own, from Personal lighting: open the environment
+    /// picker, to load a sky of the inventory.
+    Picker,
+    /// Savage Viewer's own, from Personal lighting: open the sky editor on
+    /// the sky shown, to change it further and save it under a name.
+    EditSky,
 }
 
 /// LLFloaterEnvironmentAdjust slider scales.
@@ -411,6 +417,24 @@ impl EnvironmentUi {
                 night_sky_rows(ui, p, night);
             }
             ui.add_space(4.0);
+            // Savage Viewer's own: the way from here to a saved sky. The
+            // picker loads one of the inventory; the sky editor opens on
+            // the sky shown, with the rights of its source, and its Save
+            // as asks for the name (App::open_env_editor_snapshot).
+            ui.horizontal(|ui| {
+                if widgets::flat_button(ui, p, aurora_i18n::tr!("ui-environment-load-sky"))
+                    .on_hover_text(aurora_i18n::tr!("ui-environment-load-sky-tip"))
+                    .clicked()
+                {
+                    out = Some(EnvAction::Picker);
+                }
+                if widgets::flat_button(ui, p, aurora_i18n::tr!("ui-environment-edit-save-sky"))
+                    .on_hover_text(aurora_i18n::tr!("ui-environment-edit-save-sky-tip"))
+                    .clicked()
+                {
+                    out = Some(EnvAction::EditSky);
+                }
+            });
             ui.horizontal(|ui| {
                 if self.confirm_reset {
                     ui.label(

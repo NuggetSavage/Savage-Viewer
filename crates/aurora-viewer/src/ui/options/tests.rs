@@ -93,6 +93,8 @@ const BEFORE: &[&str] = &[
     "bloom",
     "bloom_strength",
     "light_strength",
+    "shadow_resolution",
+    "shadow_distance",
     "water_reflections",
     "mirrors",
     "ssr",

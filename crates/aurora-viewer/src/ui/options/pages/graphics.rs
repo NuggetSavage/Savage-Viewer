@@ -302,20 +302,6 @@ fn quality(cx: &mut Cx) {
             .row_with(tr!("graphics-saved-title"), tr!("graphics-saved-help"), &Nothing, |ui, s, st, _| {
                 super::super::saved_graphics::controls(ui, &p, s, st)
             });
-        // Savage Viewer's own: writes the rows of the Light and Reflections
-        // tabs, which is where each of them is tracked
-        cx.keywords("Black Dragon bling shine chain").row(
-            tr!("ui-options-black-dragon-look"),
-            tr!("ui-options-black-dragon-look-help"),
-            &Nothing,
-            |ui, s| {
-                let clicked = ui.button(tr!("ui-options-black-dragon-look-apply")).clicked();
-                if clicked {
-                    crate::graphics_presets::black_dragon_look(s);
-                }
-                clicked
-            },
-        );
     });
     cx.group(tr!("ui-options-distance-and-detail"), |cx| {
         cx.slider(
@@ -594,6 +580,11 @@ fn light(cx: &mut Cx) {
             |ui, s| {
                 let changed = stepped(ui, &p, &mut s.shadow_quality, &levels);
                 s.shadows = s.shadow_quality > 0;
+                if changed {
+                    // a step is a preset: the values set by hand follow it
+                    s.shadow_resolution = 0;
+                    s.shadow_distance = 0.0;
+                }
                 changed
             },
         );
@@ -601,6 +592,49 @@ fn light(cx: &mut Cx) {
         cx.track(&field!(shadows));
         let off = cx.s.shadow_quality == 0;
         cx.subs(off, |cx| {
+            // Savage Viewer's own, after Black Dragon's RenderShadowResolution
+            // and RenderShadowDistance: the step's two values, by hand
+            cx.keywords("Black Dragon RenderShadowResolution").row(
+                tr!("ui-options-shadow-resolution"),
+                tr!("ui-options-shadow-resolution-help"),
+                &field!(shadow_resolution),
+                |ui, s| {
+                    let mut value = s.shadow_params().0;
+                    let changed = ui
+                        .add(
+                            egui::Slider::new(&mut value, crate::settings::SHADOW_RESOLUTION)
+                                .step_by(64.0)
+                                .custom_parser(aurora_i18n::parse_number)
+                                .trailing_fill(true),
+                        )
+                        .changed();
+                    if changed {
+                        s.shadow_resolution = value;
+                    }
+                    changed
+                },
+            );
+            cx.keywords("Black Dragon RenderShadowDistance").row(
+                tr!("ui-options-shadow-distance"),
+                tr!("ui-options-shadow-distance-help"),
+                &field!(shadow_distance),
+                |ui, s| {
+                    let mut value = s.shadow_params().1;
+                    let changed = ui
+                        .add(
+                            egui::Slider::new(&mut value, crate::settings::SHADOW_DISTANCE)
+                                .step_by(1.0)
+                                .suffix(" m")
+                                .custom_parser(aurora_i18n::parse_number)
+                                .trailing_fill(true),
+                        )
+                        .changed();
+                    if changed {
+                        s.shadow_distance = value;
+                    }
+                    changed
+                },
+            );
             cx.toggle(
                 tr!("ui-options-projector-shadows"),
                 tr!("ui-options-projector-shadows-help"),

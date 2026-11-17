@@ -161,8 +161,14 @@ pub struct Updater {
 pub fn checks_enabled() -> bool {
     std::env::var_os("AURORA_DEMO").is_none()
         && (aurora_updater::test_environment().is_some()
-            || (env!("AURORA_BUILD_PROFILE") == "release" && published_version(aurora_version::version())))
+            || (UPSTREAM_FEED && env!("AURORA_BUILD_PROFILE") == "release" && published_version(aurora_version::version())))
 }
+
+/// Savage Viewer's own: its versions carry their own numbers (v0.2.0...),
+/// which upstream's feed knows nothing of, and every release there would
+/// read as newer. The viewer never follows that feed: a new version is a
+/// rebuild from the fork.
+const UPSTREAM_FEED: bool = false;
 
 /// A version the Release workflow published: a stable one, or a beta. A
 /// development build (Git distance and commit after the tag) never updates.

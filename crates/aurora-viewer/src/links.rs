@@ -6,6 +6,11 @@
 pub const GITHUB: &str = "https://github.com/NuggetSavage/savage-viewer";
 /// Issue template chooser, opened in the browser by "Report a bug" (login
 /// screen, top bar, Help menu) and by the crash window.
+/// Savage Viewer's own: whether the interface offers "Report a bug" (the
+/// top bar's button and its switch, the Help menu's line, the login
+/// screen's button). Off in the viewer: the fork keeps no issue tracker.
+/// On in the tests, which still cover upstream's button.
+pub const BUG_REPORTS: bool = cfg!(test);
 pub const NEW_ISSUE: &str = "https://github.com/NuggetSavage/savage-viewer/issues/new/choose";
 /// The project's wiki, generated from the guides of `docs/`
 /// (`scripts/build-wiki.ps1`): Help › Aurora Viewer wiki.

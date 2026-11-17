@@ -15550,11 +15550,12 @@ impl App {
                 );
                 let status = ui::bars::StatusInfo {
                     location_hidden: self.world.rlva.has("showloc"),
-                    show_bug_report: if self.demo {
-                        ui::bars::demo::get().bug.unwrap_or(self.settings.show_bug_report)
-                    } else {
-                        self.settings.show_bug_report
-                    },
+                    show_bug_report: crate::links::BUG_REPORTS
+                        && if self.demo {
+                            ui::bars::demo::get().bug.unwrap_or(self.settings.show_bug_report)
+                        } else {
+                            self.settings.show_bug_report
+                        },
                     show_huds: self.settings.show_huds,
                     hud_zoom: self.world.hud_zoom,
                     ban_lines: self.settings.maps.ban_lines,

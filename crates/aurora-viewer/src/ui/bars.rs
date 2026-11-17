@@ -1291,7 +1291,7 @@ fn main_menus(ui: &mut egui::Ui, p: &Palette, panels: &mut Panels, st: &StatusIn
         if crate::updater::checks_enabled() && menu::item(ui, p, "download-filled", aurora_i18n::tr!("update-check")) {
             *action = BarAction::CheckUpdates;
         }
-        if menu::item(ui, p, "bug-filled", aurora_i18n::tr!("bug-title")) {
+        if crate::links::BUG_REPORTS && menu::item(ui, p, "bug-filled", aurora_i18n::tr!("bug-title")) {
             *action = BarAction::ReportBug;
         }
         if menu::item(ui, p, "flag-filled", aurora_i18n::tr!("report-abuse-title")) {

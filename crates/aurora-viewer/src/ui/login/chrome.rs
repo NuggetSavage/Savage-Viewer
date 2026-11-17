@@ -73,18 +73,20 @@ pub fn footer(ctx: &Context, p: &Palette, icons: &Icons, info: &LoginInfo, sideb
                 super::link_button(ui, p, "brand-discord-filled", "Discord", crate::links::DISCORD);
                 super::link_button(ui, p, "brand-github-filled", "GitHub", crate::links::GITHUB);
                 super::link_button(ui, p, "world-filled", aurora_i18n::tr!("ui-login-website"), crate::links::WEBSITE);
-                let bug = widgets::action_button(
-                    ui,
-                    p,
-                    "bug-filled",
-                    aurora_i18n::tr!("bug-title"),
-                    ActionKind::Caution,
-                    Vec2::new(0.0, 30.0),
-                );
-                if bug.clicked() {
-                    action = LoginAction::ReportBug;
-                } else if bug.secondary_clicked() {
-                    action = LoginAction::CopyVersion;
+                if crate::links::BUG_REPORTS {
+                    let bug = widgets::action_button(
+                        ui,
+                        p,
+                        "bug-filled",
+                        aurora_i18n::tr!("bug-title"),
+                        ActionKind::Caution,
+                        Vec2::new(0.0, 30.0),
+                    );
+                    if bug.clicked() {
+                        action = LoginAction::ReportBug;
+                    } else if bug.secondary_clicked() {
+                        action = LoginAction::CopyVersion;
+                    }
                 }
                 if !sidebar_visible
                     && widgets::action_button(

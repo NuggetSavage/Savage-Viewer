@@ -770,8 +770,10 @@ impl App {
     }
 
     /// A key while the viewfinder shows; true when it is the viewfinder's.
-    /// Enter is the shutter (held: the focus); Tab (and Q when no shortcut
-    /// of the viewer has it) the quick menu, I the display, N the AF mode,
+    /// Enter is the shutter (held: the focus); Tab the quick menu (Savage
+    /// Viewer: Q rolls the camera instead, to the left, Shift + Q to the
+    /// right, a degree a press and on while held; E too, to the right, when
+    /// no shortcut has it; 0 puts it straight), I the display, N the AF mode,
     /// V the AF area, G the guide, H or F1 the help, 1 to 5 the focal
     /// lengths. The letters only when no shortcut of the viewer uses the
     /// key: the movement keys stay the camera's and the avatar's.
@@ -798,7 +800,8 @@ impl App {
             _ => String::new(),
         };
         let which = match code {
-            KeyCode::Tab => Some('q'),
+            KeyCode::Tab => Some('m'),
+            KeyCode::Digit0 | KeyCode::Numpad0 => Some('0'),
             KeyCode::F1 => Some('h'),
             KeyCode::Digit1 | KeyCode::Numpad1 => Some('1'),
             KeyCode::Digit2 | KeyCode::Numpad2 => Some('2'),
@@ -808,19 +811,29 @@ impl App {
             _ if free => letter
                 .chars()
                 .next()
-                .filter(|c| matches!(c, 'q' | 'i' | 'n' | 'v' | 'g' | 'h' | 'l')),
+                .filter(|c| matches!(c, 'q' | 'e' | 'i' | 'n' | 'v' | 'g' | 'h' | 'l')),
             _ => None,
         };
         let Some(which) = which else {
             return false;
         };
+        // the camera's roll: every press counts, a held key's repeats too
+        if let Some(direction) = vf::roll_key(which, mods.shift) {
+            if pressed && !self.snapshots.vf.menu && !self.snapshots.vf.help {
+                self.camera.roll = match direction {
+                    0 => 0.0,
+                    dir => vf::step_roll(self.camera.roll.to_degrees(), dir).to_radians(),
+                };
+            }
+            return true;
+        }
         if !pressed || repeat {
             return true;
         }
         let v = &mut self.snapshots.vf;
         let s = &mut self.settings.snapshot;
         match which {
-            'q' => {
+            'm' => {
                 v.menu = !v.menu;
                 v.help = false;
             }
@@ -865,29 +878,13 @@ impl App {
         kb.triggered(&input, Mods::default()).is_some() || !kb.held_actions_of(&input).is_empty()
     }
 
-    /// The keys the help names: the AF mode's, the menu's (Q too when no
-    /// shortcut of the viewer has it) and the first person's.
+    /// The keys the help names: the AF mode's, the menu's and the first
+    /// person's.
     fn vf_keys(&self) -> (String, String, Option<String>) {
         let kb = &self.settings.keybinds;
-        let q_taken = [
-            Bind::Forward,
-            Bind::Back,
-            Bind::Left,
-            Bind::Right,
-            Bind::StrafeLeft,
-            Bind::StrafeRight,
-            Bind::Up,
-            Bind::Down,
-            Bind::Fly,
-            Bind::Mouselook,
-        ]
-        .iter()
-        .flat_map(|a| kb.get(*a))
-        .flatten()
-        .any(|b| !b.ctrl && !b.alt && !b.shift && b.label() == "Q");
-        let menu = if q_taken { "Tab".to_owned() } else { "Q / Tab".to_owned() };
+        // (Savage Viewer: Q rolls the camera, the menu is Tab's alone)
         let first = kb.get(Bind::Mouselook)[0].as_ref().map(|b| b.label());
-        ("N".to_owned(), menu, first)
+        ("N".to_owned(), "Tab".to_owned(), first)
     }
 
     /// The viewfinder over the world (the interface hidden): the overlay,

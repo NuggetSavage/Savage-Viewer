@@ -5,6 +5,41 @@ every change of ours is on `savage` and is listed here, newest first, so a
 merge of upstream knows what to keep. Upstream's `TASKS.md` is left alone:
 it is rewritten daily there and any line of ours would conflict.
 
+## 2026-11-16: version 0.2.0 (shadow sliders, roll keys, sky buttons, no bug button, versions)
+
+- **Versions:** the fork tags its versions (`v0.1.0` is the build of
+  2026-11-15, `v0.2.0` this one); `aurora-version` reads the tag, so the
+  title bar and About show the number. The plain-language list of changes
+  is `savage/CHANGELOG.md`. `savage/savage-build.ps1` fetches the tags and
+  keeps a copy of every viewer built in `savage-viewer-app\versions\`.
+- **Updates:** the viewer never follows upstream's release feed
+  (`updater::UPSTREAM_FEED`), which a numbered version would otherwise
+  have switched on (`checks_enabled`).
+- **Bug reports:** the interface no longer offers "Report a bug"
+  (`links::BUG_REPORTS`, false outside the tests): the top bar's button and
+  its switches, the Help menu's line, the login screen's button. The
+  crash window's own link is unchanged.
+- **Shadows by hand:** `Settings::shadow_resolution` (1024 to 6144) and
+  `shadow_distance` (16 to 512 m) ride over the shadow quality's step
+  (`settings::shadow_fine`; 0 follows the step). Preferences > Graphics >
+  Light, under Shadow quality. Choosing a quality step or a graphics level
+  puts the step's values back; saved profiles keep them. After Black
+  Dragon's RenderShadowResolution and RenderShadowDistance, by their
+  names and ranges on its Display page only: not matched to its code.
+- **Roll keys in photo mode:** Q rolls the camera to the left, Shift + Q
+  to the right, a degree a press and on while held, 0 puts it straight
+  (`snapshot::viewfinder::roll_key`). E rolls to the right only when no
+  shortcut has it (it is Jump by default). Q no longer opens the quick
+  menu: Tab does.
+- **Personal lighting** has "Load a sky..." (the environment picker) and
+  "Edit and save..." (the sky editor on the sky shown, with the rights of
+  its source, as World > New sky does).
+- **Removed:** the "Black Dragon look" button of 2026-11-10 (not a
+  measured match). Light strength stays.
+- **Not verified here:** linted with the whole viewer and the catalogue
+  tests pass; the viewer's own tests were not run, nothing was seen on
+  screen, the build script was not run (no PowerShell here).
+
 ## 2026-11-13: profiles hold the photo filters, a clean hidden display, the sun dome
 
 - **Saved graphics profiles hold the look:** a profile now keeps the photo

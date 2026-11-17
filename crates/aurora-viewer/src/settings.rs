@@ -596,6 +596,13 @@ pub struct Settings {
     pub bloom: bool,
     /// The share of the light over the threshold it spreads (0.05 to 1).
     pub bloom_strength: f32,
+    /// Savage Viewer's own: the shadow map's resolution set by hand (1024 to
+    /// 6144 per cascade, after Black Dragon's RenderShadowResolution); 0
+    /// follows the shadow quality's step (`shadow_fine`).
+    pub shadow_resolution: u32,
+    /// Savage Viewer's own: how far the shadows reach, set by hand (16 to
+    /// 512 m, RenderShadowDistance); 0 follows the quality's step.
+    pub shadow_distance: f32,
     /// Savage Viewer's own: how strong the sun and the moon light the scene,
     /// times the sky's own (`light_strength`, 0.25 to 10; 1 leaves the sky
     /// as it is). After Black Dragon's RenderGlobalLightStrength slider.
@@ -1522,6 +1529,32 @@ pub(crate) const FONT_SCALE_MAX: f32 = 2.0;
 /// The default strength of the bloom (half of the light over its threshold).
 pub(crate) const BLOOM_STRENGTH: f32 = 0.5;
 
+/// The range of the shadow resolution set by hand, per cascade.
+pub(crate) const SHADOW_RESOLUTION: std::ops::RangeInclusive<u32> = 1024..=6144;
+/// The range of the shadow distance set by hand, in metres.
+pub(crate) const SHADOW_DISTANCE: std::ops::RangeInclusive<f32> = 16.0..=512.0;
+
+/// The shadows' (resolution, distance): `step`, the quality's own, with
+/// the values set by hand over it (0 leaves the step's). Shadows that are
+/// off stay off whatever was set.
+pub(crate) fn shadow_fine(step: (u32, f32), resolution: u32, distance: f32) -> (u32, f32) {
+    if step.0 == 0 {
+        return step;
+    }
+    (
+        if resolution > 0 {
+            resolution.clamp(*SHADOW_RESOLUTION.start(), *SHADOW_RESOLUTION.end())
+        } else {
+            step.0
+        },
+        if distance.is_finite() && distance > 0.0 {
+            distance.clamp(*SHADOW_DISTANCE.start(), *SHADOW_DISTANCE.end())
+        } else {
+            step.1
+        },
+    )
+}
+
 /// The light strength that leaves the sky's sun and moon as they are.
 pub(crate) const LIGHT_STRENGTH: f32 = 1.0;
 /// The range of the light strength slider.
@@ -1951,6 +1984,8 @@ impl Default for Settings {
             bloom: false,
             bloom_strength: BLOOM_STRENGTH,
             light_strength: LIGHT_STRENGTH,
+            shadow_resolution: 0,
+            shadow_distance: 0.0,
             occlusion_culling: true,
             lod_factor: 2.0,
             tree_lod_factor: 0.5,
@@ -2925,6 +2960,14 @@ impl Settings {
             BLOOM_STRENGTH
         };
         self.light_strength = light_strength(self.light_strength);
+        if self.shadow_resolution > 0 {
+            self.shadow_resolution = self.shadow_resolution.clamp(*SHADOW_RESOLUTION.start(), *SHADOW_RESOLUTION.end());
+        }
+        self.shadow_distance = if self.shadow_distance.is_finite() && self.shadow_distance > 0.0 {
+            self.shadow_distance.clamp(*SHADOW_DISTANCE.start(), *SHADOW_DISTANCE.end())
+        } else {
+            0.0
+        };
         self.lod_factor = self.lod_factor.clamp(0.5, 4.0);
         let area = |v: f32, default: f32| if v.is_finite() { v.clamp(0.0, 1.0e6) } else { default };
         self.large_surface_prim_threshold = area(self.large_surface_prim_threshold, 75.0);
@@ -3150,9 +3193,14 @@ impl Settings {
         auto_texture_budget(dedicated_mb, shared_mb, integrated)
     }
 
-    /// (resolution, distance) for the shadow quality step.
+    /// (resolution, distance) of the shadows: the quality's step, or the
+    /// values set by hand over it.
     pub fn shadow_params(&self) -> (u32, f32) {
-        Self::shadow_params_of(self.shadow_quality)
+        shadow_fine(
+            Self::shadow_params_of(self.shadow_quality),
+            self.shadow_resolution,
+            self.shadow_distance,
+        )
     }
 
     /// (resolution, distance) of a shadow quality step.

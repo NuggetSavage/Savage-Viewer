@@ -1,10 +1,13 @@
 # Savage Viewer: what changed, version by version
 
 The newest version is at the top. The number is shown in the viewer's title
-bar and in About. Every version is tagged on GitHub (`v0.2.0`, ...), and
-the build keeps a copy of each one in `C:\dev\savage-viewer-app\versions`.
+bar and in About. Each version below names its commit on GitHub (branch
+`savage`), which is the exact code of that version, and the build keeps a
+copy of each viewer in `C:\dev\savage-viewer-app\versions`.
 
 ## 0.2.0 (2026-11-16)
+
+Commit: the one titled "Version 0.2.0" on GitHub (it sets `savage/VERSION`).
 
 New
 - Shadow resolution (1024 to 6144) and Shadow distance (16 to 256 m)
@@ -38,6 +41,9 @@ Known limits
 - Not seen on screen before release: built and reviewed from the code only.
 
 ## 0.1.0 (code of 2026-11-13, built 2026-11-15)
+
+Commit: `b700889`. Its title bar reads 0.0.0+1564.gb700889b2: it was built
+before versions had numbers.
 
 - Saved graphics profiles also keep your photo filters and the "Keep on
   in the world" switch.

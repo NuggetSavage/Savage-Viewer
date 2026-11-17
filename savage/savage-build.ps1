@@ -67,9 +67,26 @@ try {
     Push-Location $Root
     try {
         Step 'Code being built'
-        # version tags (v0.2.0...) give the viewer its number; a failure
-        # here only means the number may read 0.0.0
-        Run 'git fetch --tags --force --quiet origin' | Out-Null
+        # The viewer takes its number from a Git tag (v0.2.0...). The
+        # number of the code is in savage\VERSION, and the tag goes on the
+        # commit that last changed that file. The tag is made here, in
+        # this folder only: nothing is sent to GitHub. A failure here only
+        # means the number reads 0.0.0.
+        $versionFile = Join-Path $Root 'savage\VERSION'
+        if (Test-Path -LiteralPath $versionFile) {
+            $number = ([string](Get-Content -LiteralPath $versionFile -TotalCount 1)).Trim()
+            if ($number -match '^\d+\.\d+\.\d+$') {
+                $tag = "v$number"
+                cmd /d /c "git rev-parse -q --verify refs/tags/$tag >nul 2>&1"
+                if ($LASTEXITCODE -ne 0) {
+                    $at = ([string](cmd /d /c "git log -1 --format=%H -- savage/VERSION 2>nul")).Trim()
+                    if ($at -match '^[0-9a-f]{40}$') {
+                        Run "git tag $tag $at" | Out-Null
+                    }
+                }
+                Log "Version of this code: $number"
+            }
+        }
         Run 'git status --short --branch' | Out-Null
         Run 'git log -1 --oneline' | Out-Null
 

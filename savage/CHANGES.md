@@ -7,10 +7,13 @@ it is rewritten daily there and any line of ours would conflict.
 
 ## 2026-11-16: version 0.2.0 (shadow sliders, roll keys, sky buttons, no bug button, versions)
 
-- **Versions:** the fork tags its versions (`v0.1.0` is the build of
-  2026-11-15, `v0.2.0` this one); `aurora-version` reads the tag, so the
-  title bar and About show the number. The plain-language list of changes
-  is `savage/CHANGELOG.md`. `savage/savage-build.ps1` fetches the tags and
+- **Versions:** `savage/VERSION` holds the number of the code (0.2.0).
+  `savage/savage-build.ps1` puts the Git tag `v<number>` on the commit
+  that last changed that file, in the owner's folder only (this
+  workspace may not push tags to the fork), and `aurora-version` reads
+  the tag, so the title bar and About show the number. The file changes
+  in the last commit of a version. The plain-language list of changes,
+  with the commit of each version, is `savage/CHANGELOG.md`. The build
   keeps a copy of every viewer built in `savage-viewer-app\versions\`.
 - **Updates:** the viewer never follows upstream's release feed
   (`updater::UPSTREAM_FEED`), which a numbered version would otherwise

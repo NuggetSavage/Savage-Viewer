@@ -545,8 +545,12 @@ impl Viewfinder {
         // the on-screen controls (lens ring, AF choices, camera pad)
         // (Savage Viewer: Essential puts the lens and aperture controls away
         // too; upstream kept them until Hidden)
-        let ctl = full && !self.menu && self.controls_shown(ctx, s, screen, f.now);
-        let pad = ctl && s.viewfinder.pad;
+        // (Savage Viewer: the camera pad stays in Essential when it is
+        // switched on, to move the camera with the lens controls away; its
+        // switch is on the dock, which Essential keeps)
+        let on_screen = shows && !self.menu && self.controls_shown(ctx, s, screen, f.now);
+        let ctl = full && on_screen;
+        let pad = on_screen && s.viewfinder.pad;
         if full {
             self.top_bar(ctx, p, &back, screen, s, panel, f, &mut out);
         }

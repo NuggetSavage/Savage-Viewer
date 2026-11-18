@@ -18,6 +18,13 @@ pub(super) struct Editor {
     /// every `FOREIGN_RESCAN` while the page shows.
     foreign: Vec<foreign::Entry>,
     foreign_read: Option<std::time::Instant>,
+    /// The profiles saved before the folder existed have their file.
+    exported: bool,
+    /// The profiles whose file holds something else than the profile (a
+    /// newer copy put there by hand, or a file a Save could not write):
+    /// listed apart, so that loading the file is the user's choice and
+    /// never replaces a profile on its own.
+    file_differs: Vec<String>,
     /// What the last preset file chosen gave.
     report: Option<Report>,
 }
@@ -121,9 +128,22 @@ fn report(ui: &mut egui::Ui, editor: &Editor) {
 fn profiles(ui: &mut egui::Ui, p: &Palette, s: &mut Settings, st: &mut OptionsUi) -> bool {
     let mut changed = false;
     let editor = &mut st.saved_graphics;
+    if !editor.exported {
+        foreign::export_missing(&s.graphics_saved);
+        editor.exported = true;
+    }
     if editor.foreign_read.is_none_or(|at| at.elapsed() >= FOREIGN_RESCAN) {
         editor.foreign = foreign::list(&foreign::dir());
         editor.foreign_read = Some(std::time::Instant::now());
+        editor.file_differs = editor
+            .foreign
+            .iter()
+            .filter(|e| e.kind == foreign::Kind::Own)
+            .filter_map(|e| {
+                let (name, profile) = s.graphics_saved.get_key_value(&e.name)?;
+                (foreign::read_profile(&e.path)? != *profile).then(|| name.clone())
+            })
+            .collect();
     }
     let current = saved::choices(s);
     let selected = saved::selected(s).map(str::to_owned);
@@ -184,28 +204,81 @@ fn profiles(ui: &mut egui::Ui, p: &Palette, s: &mut Settings, st: &mut OptionsUi
                 if current.is_empty() {
                     ui.label(tr!("graphics-saved-empty"));
                 }
-                // (Savage Viewer) the preset files of the presets folder
-                if !editor.foreign.is_empty() {
+                // (Savage Viewer) the files of the presets folder that are
+                // no profile yet: this viewer's own, copied there by hand,
+                // and the other viewers'
+                let files: Vec<&foreign::Entry> = editor
+                    .foreign
+                    .iter()
+                    .filter(|e| {
+                        // by the name as a Windows folder holds it: "night"
+                        // is the file of the profile "Night"
+                        let taken = || s.graphics_saved.keys().any(|k| k.to_lowercase() == e.name.to_lowercase());
+                        e.kind == foreign::Kind::Other || (valid_name(&e.name) && !taken())
+                    })
+                    .collect();
+                if !files.is_empty() || !editor.file_differs.is_empty() {
                     widgets::divider(ui, p);
                     ui.label(RichText::new(tr!("graphics-foreign-heading")).small());
                 }
-                let mut chosen = None;
-                for entry in &editor.foreign {
+                // a profile whose file was changed outside the viewer
+                let mut reload = None;
+                for name in &editor.file_differs {
                     let row = ui
-                        .selectable_label(false, entry.name.as_str())
-                        .on_hover_text(tr!("graphics-foreign-row-tip"));
+                        .selectable_label(false, tr!("graphics-file-changed", name = name.clone()))
+                        .on_hover_text(tr!("graphics-file-changed-tip"));
                     if row.clicked() {
+                        reload = Some(name.clone());
+                        ui.close();
+                    }
+                }
+                if let Some(name) = reload {
+                    editor.report = match foreign::read_profile(&foreign::profile_path(&foreign::dir(), &name)) {
+                        Some(profile) => {
+                            s.graphics_saved.insert(name.clone(), profile);
+                            changed |= saved::select(s, &name);
+                            None
+                        }
+                        None => Some(Report { name, read: None }),
+                    };
+                    editor.foreign_read = None;
+                }
+                let mut chosen = None;
+                for entry in files {
+                    let tip = match entry.kind {
+                        foreign::Kind::Own => tr!("graphics-file-row-tip"),
+                        foreign::Kind::Other => tr!("graphics-foreign-row-tip"),
+                    };
+                    if ui.selectable_label(false, entry.name.as_str()).on_hover_text(tip).clicked() {
                         chosen = Some(entry.clone());
                         ui.close();
                     }
                 }
-                if let Some(entry) = chosen {
-                    let read = foreign::load(&entry.path).map(|preset| {
-                        saved::apply_foreign(s, &preset.mapped);
-                        changed = true;
-                        (preset.taken.len(), preset.left_out)
-                    });
-                    editor.report = Some(Report { name: entry.name, read });
+                match chosen {
+                    Some(entry) if entry.kind == foreign::Kind::Own => {
+                        // a file of this viewer becomes a profile
+                        editor.report = match foreign::read_profile(&entry.path) {
+                            Some(profile) => {
+                                s.graphics_saved.insert(entry.name.clone(), profile);
+                                changed |= saved::select(s, &entry.name);
+                                editor.foreign_read = None;
+                                None
+                            }
+                            None => Some(Report {
+                                name: entry.name,
+                                read: None,
+                            }),
+                        };
+                    }
+                    Some(entry) => {
+                        let read = foreign::load(&entry.path).map(|preset| {
+                            saved::apply_foreign(s, &preset.mapped);
+                            changed = true;
+                            (preset.taken.len(), preset.left_out)
+                        });
+                        editor.report = Some(Report { name: entry.name, read });
+                    }
+                    None => {}
                 }
             });
         if demo_list {
@@ -215,6 +288,10 @@ fn profiles(ui: &mut egui::Ui, p: &Palette, s: &mut Settings, st: &mut OptionsUi
         if ui.add_enabled(selected.is_some(), egui::Button::new(tr!("common-save"))).clicked() {
             changed |= saved::save_selected(s);
             editor.report = None;
+            if let Some((name, profile)) = saved::selected(s).and_then(|name| s.graphics_saved.get_key_value(name)) {
+                foreign::save_profile(name, profile);
+            }
+            editor.foreign_read = None;
         }
         if ui.button(tr!("graphics-saved-save-as")).clicked() {
             editor.request_save_as(s);
@@ -286,18 +363,24 @@ pub(super) fn confirm(ctx: &egui::Context, p: &Palette, s: &mut Settings, st: &m
         match editor.pending.take() {
             Some(Pending::Save(values)) => {
                 let name = editor.name.trim().to_owned();
-                if s.graphics_saved.contains_key(&name) {
-                    editor.pending = Some(Pending::Replace(name, values));
+                // (Savage Viewer) a name that differs by its case only is
+                // the same file in a Windows folder: the same profile
+                let existing = s.graphics_saved.keys().find(|k| k.to_lowercase() == name.to_lowercase()).cloned();
+                if let Some(existing) = existing {
+                    editor.pending = Some(Pending::Replace(existing, values));
                     return;
                 }
+                foreign::save_profile(&name, &values);
                 s.graphics_saved.insert(name.clone(), *values);
                 s.graphics_saved_active = Some(name);
             }
             Some(Pending::Replace(name, values)) => {
+                foreign::save_profile(&name, &values);
                 s.graphics_saved.insert(name.clone(), *values);
                 s.graphics_saved_active = Some(name);
             }
             Some(Pending::Delete(name)) => {
+                foreign::remove_profile(&name);
                 s.graphics_saved.remove(&name);
                 if s.graphics_saved_active.as_ref() == Some(&name) {
                     s.graphics_saved_active = None;
@@ -306,6 +389,7 @@ pub(super) fn confirm(ctx: &egui::Context, p: &Palette, s: &mut Settings, st: &m
             }
             None => return,
         }
+        editor.foreign_read = None;
         r.changed = true;
     } else if cancelled || modal.should_close() {
         editor.pending = None;

@@ -5,6 +5,31 @@ bar and in About. Each version below names its commit on GitHub (branch
 `savage`), which is the exact code of that version, and the build keeps a
 copy of each viewer in `C:\dev\savage-viewer-app\versions`.
 
+## 0.4.0 (2026-11-17)
+
+Commit: the one titled "Version 0.4.0" on GitHub.
+
+Added
+- Savage Viewer's own graphics presets are now files, the way Black
+  Dragon's are. Every saved graphics profile is one file in the presets
+  folder (Preferences > Graphics > Saved graphics profiles > folder button).
+  - Save and Save as… write the file. Deleting a profile deletes its file
+    (the viewer asks first).
+  - Copy a file out of the folder to share a preset or back it up.
+  - Put a Savage preset file into the folder and it shows in the list under
+    "Preset files in the presets folder". Choosing it adds it to your
+    profiles and applies it.
+  - Replace a profile's file with a newer copy and the list shows it as
+    "Name (file changed)". Choosing that loads the file into the profile.
+    A file never replaces a profile on its own.
+  - Two names that differ only by capitals ("Night", "night") are the same
+    preset, because Windows keeps them as one file.
+  - The profiles you already had get their file the first time you open
+    Preferences > Graphics.
+- A preset holds everything a saved profile holds: all the quality
+  settings, shadow resolution and distance, light strength, exposure, tone
+  mapping, depth of field, water effects, and your photo filters.
+
 ## 0.3.0 (2026-11-17)
 
 Commit: the one titled "Version 0.3.0" on GitHub.

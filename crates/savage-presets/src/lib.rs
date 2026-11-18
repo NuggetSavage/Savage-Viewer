@@ -232,6 +232,37 @@ pub fn display_name(stem: &str) -> String {
     if name.is_empty() { stem.to_owned() } else { name.to_owned() }
 }
 
+/// The file name, without its extension, of a preset called `name`: the
+/// name itself, with every character a file name cannot hold everywhere
+/// (and the `%` itself) percent-encoded, the way Black Dragon names its
+/// own. [`display_name`] gives the name back. A leading or trailing space
+/// or dot is encoded too (Windows drops them), and a name Windows keeps for
+/// a device ("CON", "NUL", "COM1"…) has its first letter encoded.
+pub fn file_stem(name: &str) -> String {
+    const DEVICES: [&str; 22] = [
+        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4",
+        "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    ];
+    let device = DEVICES
+        .iter()
+        .any(|d| name.split('.').next().is_some_and(|base| base.trim().eq_ignore_ascii_case(d)));
+    let last = name.chars().count().saturating_sub(1);
+    let mut out = String::with_capacity(name.len());
+    for (i, c) in name.chars().enumerate() {
+        let edge = (i == 0 || i == last) && matches!(c, ' ' | '.');
+        let unsafe_char = c.is_control() || matches!(c, '%' | '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*');
+        if edge || unsafe_char || (device && i == 0) {
+            let mut buf = [0u8; 4];
+            for b in c.encode_utf8(&mut buf).bytes() {
+                out.push_str(&format!("%{b:02X}"));
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 fn set<T>(slot: &mut Option<T>, value: Option<T>) -> bool {
     match value {
         Some(v) => {
@@ -330,6 +361,30 @@ mod tests {
         assert_eq!(display_name("%ff%fe"), "%ff%fe", "bytes that are no text stay as written");
         assert_eq!(display_name("a%0Ab"), "ab", "no line break in a name");
         assert_eq!(display_name("%20"), "%20", "an empty name falls back to the file's");
+    }
+
+    #[test]
+    fn a_preset_name_makes_a_file_name_that_gives_it_back() {
+        assert_eq!(file_stem("Night shoot"), "Night shoot");
+        assert_eq!(file_stem("My - Ultra (v2)"), "My - Ultra (v2)");
+        assert_eq!(file_stem("//3005B"), "%2F%2F3005B");
+        assert_eq!(file_stem("50% glow: soft?"), "50%25 glow%3A soft%3F");
+        assert_eq!(file_stem(" padded. "), "%20padded.%20");
+        assert_eq!(file_stem("..."), "%2E.%2E");
+        assert_eq!(file_stem("con"), "%63on");
+        assert_eq!(file_stem("NUL.backup"), "%4EUL.backup");
+        assert_eq!(file_stem("Console"), "Console", "only the device names themselves");
+        for name in [
+            "Night shoot",
+            "//3005B",
+            "50% glow: soft?",
+            "Été à 100%",
+            "a\\b|c*d\"e<f>g",
+            "con",
+            "日本語",
+        ] {
+            assert_eq!(display_name(&file_stem(name)), name, "{name}");
+        }
     }
 
     #[test]

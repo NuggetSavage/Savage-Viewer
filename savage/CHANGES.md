@@ -5,6 +5,25 @@ every change of ours is on `savage` and is listed here, newest first, so a
 merge of upstream knows what to keep. Upstream's `TASKS.md` is left alone:
 it is rewritten daily there and any line of ours would conflict.
 
+## 2026-11-17: version 0.4.0 (a file a profile)
+
+- `savage-presets`: `file_stem(name)`, the file name of a preset (percent
+  encoding, Windows device names), the inverse of `display_name`. 1 test.
+- `graphics_presets/foreign.rs`: `Kind` (own `.json`, other `.xml`),
+  `profile_path`, `write_profile` (temporary file then rename),
+  `save_profile`, `read_profile`, `remove_profile`, `export_missing`.
+- `ui/options/saved_graphics.rs`: Save, Save as…, Replace write the file;
+  Delete removes it; a `.json` of the folder that is no profile is listed
+  and becomes one; a profile whose file holds other values is listed as
+  changed and loads only when chosen (review: reading the file on every
+  choice let a stale file undo a Save). Names are matched without their
+  case, as a Windows folder does. The tests get a folder each.
+- The settings keep their copy of every profile (`graphics_saved`): no
+  migration, an older build still reads them.
+- Checked: clippy without the test code. The test configuration could not
+  be compiled this time (the workspace ran out of memory). Not seen on
+  screen.
+
 ## 2026-11-17: version 0.3.0 (preset files of other viewers)
 
 - New crate `crates/savage-presets`: `read(text)` gives the values of a

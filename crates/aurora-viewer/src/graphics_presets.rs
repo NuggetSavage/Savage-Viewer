@@ -39,6 +39,7 @@
 
 use crate::settings::{MAX_TEXTURE_RESOLUTION, Settings};
 
+pub(crate) mod foreign;
 pub(crate) mod saved;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -4963,6 +4963,16 @@ graphics-saved-save = Enregistrer un profil graphique
 graphics-saved-empty = Aucun profil graphique enregistré
 graphics-saved-replace = Remplacer ce profil graphique ?
 graphics-saved-delete = Supprimer ce profil graphique ?
+graphics-foreign-heading = Fichiers de préréglages d'autres viewers
+graphics-foreign-row-tip = Un fichier de préréglage du dossier des préréglages. Le choisir applique tous les réglages que Savage Viewer sait régler. Le fichier n'est jamais modifié ; utilisez Enregistrer sous… pour garder le résultat comme profil
+graphics-foreign-loaded = { $name } : { $taken ->
+    [one] 1 réglage appliqué
+   *[other] { $taken } réglages appliqués
+}, { $left } sans réglage dans Savage Viewer pour l'instant
+graphics-foreign-left-tip = Non appliqués, Savage Viewer n'a pas encore de réglage pour eux : { $names }
+graphics-foreign-left-more-tip = Non appliqués, Savage Viewer n'a pas encore de réglage pour eux : { $names }, et { $more } autres
+graphics-foreign-not-preset = { $name } n'est pas un fichier de préréglage graphique
+graphics-foreign-folder-tip = Ouvrir le dossier des préréglages. Placez-y des fichiers de préréglages graphiques (.xml) de Black Dragon ou de Firestorm : ils apparaissent dans cette liste. Savage Viewer ne fait que les lire
 graphics-fps-cap = Limiter à { $limit } images/s
 ui-options-shadow-quality = Qualité des ombres
 ui-options-projector-shadows = Ombres des projecteurs

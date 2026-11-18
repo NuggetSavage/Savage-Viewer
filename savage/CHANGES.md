@@ -5,6 +5,27 @@ every change of ours is on `savage` and is listed here, newest first, so a
 merge of upstream knows what to keep. Upstream's `TASKS.md` is left alone:
 it is rewritten daily there and any line of ours would conflict.
 
+## 2026-11-17: version 0.3.0 (preset files of other viewers)
+
+- New crate `crates/savage-presets`: `read(text)` gives the values of a
+  Black Dragon preset (one `<llsd>` name/value document a setting) or a
+  Legacy Viewer one (a map of name to `Value`), with the names taken and
+  left out; `display_name` decodes Black Dragon's file names. 6 unit tests,
+  run on real Black Dragon preset files (15 of 96 settings taken from
+  one).
+- `graphics_presets/foreign.rs`: the folder `<settings>/graphics-presets`,
+  its list and reader; read only.
+- `graphics_presets/saved.rs`: `Saved::take` and `apply_foreign` (through
+  `Saved::apply`, which cleans the values).
+- `ui/options/saved_graphics.rs`: the files in the profiles list, the
+  result line, the folder button.
+- Not seen on screen. Scales: the setting names are the Legacy Viewer's
+  and this viewer's values follow them; `RenderShadowResolution` (array)
+  and `RenderShadowFarClip` are from an installed Black Dragon and are not
+  in its current source, so their meaning is taken from their names and
+  values. `RenderGlobalLightStrength` is left out on purpose: the presets
+  pair it with an exposure this viewer does not read.
+
 ## 2026-11-17: version 0.2.2 (Shift + E roll, camera pad in Essential, row descriptions)
 
 - `snapshot/viewfinder.rs` `roll_key`: Shift + E is -1. `app/viewfinder.rs`:

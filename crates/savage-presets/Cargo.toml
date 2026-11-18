@@ -1,0 +1,13 @@
+[package]
+name = "savage-presets"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+aurora-llsd = { version = "0.1.0", path = "../aurora-llsd" }
+
+[lints]
+workspace = true

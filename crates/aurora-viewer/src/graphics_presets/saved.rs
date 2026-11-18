@@ -116,6 +116,80 @@ impl Look {
 }
 
 impl Saved {
+    /// (Savage Viewer) Lays a preset read from another viewer's file
+    /// (`savage_presets`) over the profile: only what the file holds, each
+    /// value brought into the range of its control here. A switch the file
+    /// turns on takes this viewer's usual level when it was off (shadows and
+    /// ambient occlusion have levels here, a switch there).
+    pub fn take(&mut self, m: &savage_presets::Mapped) {
+        use crate::settings::{SHADOW_DISTANCE, SHADOW_RESOLUTION};
+        let q = &mut self.quality;
+        let put = |slot: &mut f32, v: Option<f32>| {
+            if let Some(v) = v.filter(|v| v.is_finite() && *v >= 0.0) {
+                *slot = v;
+            }
+        };
+        put(&mut q.draw_distance, m.draw_distance);
+        put(&mut q.lod_factor, m.lod_factor);
+        put(&mut q.tree_lod_factor, m.tree_lod_factor);
+        put(&mut q.avatar_physics_detail, m.avatar_physics_detail);
+        if let Some(v) = m.max_avatars {
+            q.max_avatars = v;
+        }
+        if let Some(v) = m.max_complexity {
+            q.max_complexity = v;
+        }
+        if let Some(v) = m.max_particles {
+            q.max_particles = v;
+        }
+        match m.shadows {
+            Some(false) => q.shadow_quality = 0,
+            Some(true) if q.shadow_quality == 0 => q.shadow_quality = 2,
+            _ => {}
+        }
+        if let Some(on) = m.projector_shadows {
+            q.projector_shadows = on;
+        }
+        match m.ambient_occlusion {
+            Some(false) => q.ssao = 0,
+            Some(true) if q.ssao == 0 => q.ssao = 2,
+            _ => {}
+        }
+        if let Some(on) = m.ssr {
+            q.ssr = on;
+        }
+        if let Some(on) = m.glow {
+            q.glow = on;
+        }
+        if let Some(on) = m.anisotropic {
+            q.anisotropy = if on { 16 } else { 1 };
+        }
+        self.shadows = q.shadow_quality > 0;
+        if let Some(v) = m.shadow_resolution {
+            self.shadow_resolution = v.clamp(*SHADOW_RESOLUTION.start(), *SHADOW_RESOLUTION.end());
+        }
+        if let Some(v) = m.shadow_distance.filter(|v| v.is_finite()) {
+            self.shadow_distance = v.clamp(*SHADOW_DISTANCE.start(), *SHADOW_DISTANCE.end());
+        }
+        if let Some(on) = m.avatar_physics {
+            self.avatar_physics = on;
+        }
+        if let Some(on) = m.depth_of_field {
+            self.dof.enabled = on;
+        }
+        // CameraFNumber 1..64, CameraFocalLength 1..1000, CameraFieldOfView
+        // 10..200 (`dof::Settings`)
+        if let Some(v) = m.f_number.filter(|v| v.is_finite()) {
+            self.dof.f_number = v.clamp(1.0, 64.0);
+        }
+        if let Some(v) = m.focal_length.filter(|v| v.is_finite()) {
+            self.dof.focal_length = v.clamp(1.0, 1000.0);
+        }
+        if let Some(v) = m.reference_fov.filter(|v| v.is_finite()) {
+            self.dof.reference_fov = v.clamp(10.0, 200.0);
+        }
+    }
+
     /// Whether the profile is what `s` would save now. A profile from
     /// before the looks were held says nothing of them: they do not count.
     pub fn same_as(&self, s: &Settings) -> bool {
@@ -178,6 +252,19 @@ pub fn save_selected(s: &mut Settings) -> bool {
     };
     s.graphics_saved.insert(name, Saved::capture(s));
     true
+}
+
+/// (Savage Viewer) Applies a preset read from another viewer's file, the
+/// way a saved profile is applied (`Saved::apply`: the values are cleaned
+/// like any outside data). The photo filters stay as they are: such a file
+/// holds none. No saved profile is the selected one afterwards; Save as…
+/// keeps the result as a profile of this viewer.
+pub fn apply_foreign(s: &mut Settings, m: &savage_presets::Mapped) {
+    let mut saved = Saved::capture(s);
+    saved.take(m);
+    saved.look = None;
+    saved.apply(s);
+    s.graphics_saved_active = None;
 }
 
 pub fn choices(s: &Settings) -> Vec<(String, bool)> {

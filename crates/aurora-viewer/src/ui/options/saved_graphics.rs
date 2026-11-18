@@ -1,6 +1,7 @@
 //! Named graphics controls shared with the FPS hover list.
 
 use super::{OptionsResult, OptionsUi};
+use crate::graphics_presets::foreign;
 use crate::graphics_presets::saved::{self, Saved, valid_name};
 use crate::settings::Settings;
 use crate::theme::Palette;
@@ -13,6 +14,27 @@ pub(super) struct Editor {
     name: String,
     focus_name: bool,
     pending: Option<Pending>,
+    /// (Savage Viewer) The preset files of the presets folder, read again
+    /// every `FOREIGN_RESCAN` while the page shows.
+    foreign: Vec<foreign::Entry>,
+    foreign_read: Option<std::time::Instant>,
+    /// What the last preset file chosen gave.
+    report: Option<Report>,
+}
+
+/// How often the presets folder is listed again: a file dropped there shows
+/// without closing Preferences.
+const FOREIGN_RESCAN: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// The most names the result line's tooltip lists.
+const LEFT_OUT_SHOWN: usize = 40;
+
+/// The outcome of choosing a preset file.
+struct Report {
+    name: String,
+    /// The settings applied and the names of those left out; None when the
+    /// file was no preset.
+    read: Option<(usize, Vec<String>)>,
 }
 
 enum Pending {
@@ -50,8 +72,59 @@ fn profile_row(ui: &mut egui::Ui, p: &Palette, name: &str, active: bool) -> egui
 }
 
 pub(super) fn controls(ui: &mut egui::Ui, p: &Palette, s: &mut Settings, st: &mut OptionsUi) -> bool {
+    ui.vertical(|ui| {
+        let changed = profiles(ui, p, s, st);
+        report(ui, &st.saved_graphics);
+        changed
+    })
+    .inner
+}
+
+/// (Savage Viewer) What the last preset file chosen gave, under the list:
+/// how many settings it set, and on hover the ones this viewer has no
+/// control for.
+fn report(ui: &mut egui::Ui, editor: &Editor) {
+    let Some(report) = &editor.report else {
+        return;
+    };
+    match &report.read {
+        Some((taken, left_out)) => {
+            let text = tr!(
+                "graphics-foreign-loaded",
+                name = report.name.clone(),
+                taken = *taken,
+                left = left_out.len()
+            );
+            let line = ui.label(RichText::new(text).small());
+            if !left_out.is_empty() {
+                // a whole settings file leaves hundreds out: the first ones
+                let shown = left_out
+                    .iter()
+                    .take(LEFT_OUT_SHOWN)
+                    .map(String::as_str)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let more = left_out.len().saturating_sub(LEFT_OUT_SHOWN);
+                line.on_hover_text(if more == 0 {
+                    tr!("graphics-foreign-left-tip", names = shown)
+                } else {
+                    tr!("graphics-foreign-left-more-tip", names = shown, more = more)
+                });
+            }
+        }
+        None => {
+            ui.label(RichText::new(tr!("graphics-foreign-not-preset", name = report.name.clone())).small());
+        }
+    }
+}
+
+fn profiles(ui: &mut egui::Ui, p: &Palette, s: &mut Settings, st: &mut OptionsUi) -> bool {
     let mut changed = false;
     let editor = &mut st.saved_graphics;
+    if editor.foreign_read.is_none_or(|at| at.elapsed() >= FOREIGN_RESCAN) {
+        editor.foreign = foreign::list(&foreign::dir());
+        editor.foreign_read = Some(std::time::Instant::now());
+    }
     let current = saved::choices(s);
     let selected = saved::selected(s).map(str::to_owned);
     let label = match selected.as_deref() {
@@ -75,6 +148,8 @@ pub(super) fn controls(ui: &mut egui::Ui, p: &Palette, s: &mut Settings, st: &mu
                     + ui.spacing().item_spacing.x
             })
             .sum();
+        // (Savage Viewer) and the presets folder's button, 20 points
+        let actions_width = actions_width + 20.0 + ui.spacing().item_spacing.x;
         let list_width = (ui.available_width() - actions_width).clamp(64.0, 260.0);
         let mut demo_list = false;
         // Capture the production popup and name dialog without native pointer
@@ -98,6 +173,7 @@ pub(super) fn controls(ui: &mut egui::Ui, p: &Palette, s: &mut Settings, st: &mu
                     let (load, delete) = profile_row(ui, p, name, *active).inner;
                     if load {
                         changed |= saved::select(s, name);
+                        editor.report = None;
                         ui.close();
                     }
                     if delete {
@@ -108,6 +184,29 @@ pub(super) fn controls(ui: &mut egui::Ui, p: &Palette, s: &mut Settings, st: &mu
                 if current.is_empty() {
                     ui.label(tr!("graphics-saved-empty"));
                 }
+                // (Savage Viewer) the preset files of the presets folder
+                if !editor.foreign.is_empty() {
+                    widgets::divider(ui, p);
+                    ui.label(RichText::new(tr!("graphics-foreign-heading")).small());
+                }
+                let mut chosen = None;
+                for entry in &editor.foreign {
+                    let row = ui
+                        .selectable_label(false, entry.name.as_str())
+                        .on_hover_text(tr!("graphics-foreign-row-tip"));
+                    if row.clicked() {
+                        chosen = Some(entry.clone());
+                        ui.close();
+                    }
+                }
+                if let Some(entry) = chosen {
+                    let read = foreign::load(&entry.path).map(|preset| {
+                        saved::apply_foreign(s, &preset.mapped);
+                        changed = true;
+                        (preset.taken.len(), preset.left_out)
+                    });
+                    editor.report = Some(Report { name: entry.name, read });
+                }
             });
         if demo_list {
             // Use the response's real popup ID, including ComboBox's salt.
@@ -115,9 +214,14 @@ pub(super) fn controls(ui: &mut egui::Ui, p: &Palette, s: &mut Settings, st: &mu
         }
         if ui.add_enabled(selected.is_some(), egui::Button::new(tr!("common-save"))).clicked() {
             changed |= saved::save_selected(s);
+            editor.report = None;
         }
         if ui.button(tr!("graphics-saved-save-as")).clicked() {
             editor.request_save_as(s);
+        }
+        if widgets::icon_button(ui, p, "folder-filled", tr!("graphics-foreign-folder-tip"), true) {
+            foreign::open_dir();
+            editor.foreign_read = None;
         }
     });
     changed

@@ -754,6 +754,7 @@ dependencies = [
  "rfd",
  "ron",
  "roxmltree 0.21.1",
+ "savage-presets",
  "serde",
  "serde_json",
  "serde_path_to_error",
@@ -5586,6 +5587,13 @@ name = "sansio"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c62751faa8bc286982334a082fe125184a29fc89d17775766e4f891b7d726980"
+
+[[package]]
+name = "savage-presets"
+version = "0.1.0"
+dependencies = [
+ "aurora-llsd",
+]
 
 [[package]]
 name = "schannel"

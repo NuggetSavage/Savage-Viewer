@@ -4960,6 +4960,16 @@ graphics-saved-save = Save graphics profile
 graphics-saved-empty = No saved graphics profiles
 graphics-saved-replace = Replace this graphics profile?
 graphics-saved-delete = Delete this graphics profile?
+graphics-foreign-heading = Preset files from other viewers
+graphics-foreign-row-tip = A preset file from the presets folder. Choosing it applies every setting Savage Viewer has a control for. The file is never changed; use Save as… to keep the result as your own profile
+graphics-foreign-loaded = { $name }: { $taken ->
+    [one] 1 setting applied
+   *[other] { $taken } settings applied
+}, { $left } with no control in Savage Viewer yet
+graphics-foreign-left-tip = Not applied, Savage Viewer has no control for them yet: { $names }
+graphics-foreign-left-more-tip = Not applied, Savage Viewer has no control for them yet: { $names }, and { $more } more
+graphics-foreign-not-preset = { $name } is not a graphics preset file
+graphics-foreign-folder-tip = Open the presets folder. Put Black Dragon or Firestorm graphics preset files (.xml) there and they show in this list. Savage Viewer only reads them
 graphics-fps-cap = Limit frame rate to { $limit } FPS
 ui-options-shadow-quality = Shadow quality
 ui-options-projector-shadows = Projector shadows

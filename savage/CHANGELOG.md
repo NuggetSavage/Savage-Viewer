@@ -5,6 +5,33 @@ bar and in About. Each version below names its commit on GitHub (branch
 `savage`), which is the exact code of that version, and the build keeps a
 copy of each viewer in `C:\dev\savage-viewer-app\versions`.
 
+## 0.3.0 (2026-11-17)
+
+Commit: the one titled "Version 0.3.0" on GitHub.
+
+Added
+- Black Dragon and Firestorm graphics presets load in Savage Viewer.
+  Preferences > Graphics > Saved graphics profiles has a folder button: it
+  opens the presets folder. Put preset files (.xml) there and they show in
+  the profiles list under "Preset files from other viewers". Choosing one
+  applies every setting Savage Viewer has a control for and says how many
+  it applied and how many it has no control for yet (hover the line for
+  their names). Savage Viewer only reads these files. "Save as…" keeps the
+  result as your own profile.
+- What a preset sets today: draw distance, object and tree detail, avatar
+  limit and complexity, particle count, shadows on/off, projector shadows,
+  shadow resolution and distance, ambient occlusion on/off, screen
+  reflections, glow on/off, depth of field on/off and its lens values,
+  texture filtering, avatar physics.
+- Light strength is not taken from a preset yet, on purpose: Black Dragon
+  presets pair a high light strength with their own exposure setting, which
+  Savage Viewer cannot read yet. Taking one without the other would burn the
+  picture out. Set Light strength by hand for now.
+- Not set yet (no control in Savage Viewer): glow strength, warmth and
+  width, ambient occlusion size and strength, reflection resolution and
+  brightness, shadow softness, tone curve and colour grading, vignette,
+  godrays, motion blur, lens flare and the other fine settings.
+
 ## 0.2.2 (2026-11-17)
 
 Commit: the one titled "Version 0.2.2" on GitHub.

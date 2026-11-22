@@ -70,9 +70,13 @@ pub fn footer(ctx: &Context, p: &Palette, icons: &Icons, info: &LoginInfo, sideb
             ui.add_space(4.0);
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 6.0;
-                super::link_button(ui, p, "brand-discord-filled", "Discord", crate::links::DISCORD);
+                if crate::links::UPSTREAM_LINKS {
+                    super::link_button(ui, p, "brand-discord-filled", "Discord", crate::links::DISCORD);
+                }
                 super::link_button(ui, p, "brand-github-filled", "GitHub", crate::links::GITHUB);
-                super::link_button(ui, p, "world-filled", aurora_i18n::tr!("ui-login-website"), crate::links::WEBSITE);
+                if crate::links::UPSTREAM_LINKS {
+                    super::link_button(ui, p, "world-filled", aurora_i18n::tr!("ui-login-website"), crate::links::WEBSITE);
+                }
                 if crate::links::BUG_REPORTS {
                     let bug = widgets::action_button(
                         ui,

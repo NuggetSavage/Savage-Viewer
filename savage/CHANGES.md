@@ -5,6 +5,11 @@ every change of ours is on `savage` and is listed here, newest first, so a
 merge of upstream knows what to keep. Upstream's `TASKS.md` is left alone:
 it is rewritten daily there and any line of ours would conflict.
 
+## 2026-11-22: version 0.4.1 (no upstream Discord and website buttons)
+
+- `links.rs`: `UPSTREAM_LINKS` (`cfg!(test)`), read by `ui/login/chrome.rs`
+  and `ui/about.rs`. Not reviewed by a second agent (three guarded lines).
+
 ## 2026-11-17: version 0.4.0 (a file a profile)
 
 - `savage-presets`: `file_stem(name)`, the file name of a preset (percent

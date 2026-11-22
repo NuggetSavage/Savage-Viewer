@@ -5,6 +5,15 @@ bar and in About. Each version below names its commit on GitHub (branch
 `savage`), which is the exact code of that version, and the build keeps a
 copy of each viewer in `C:\dev\savage-viewer-app\versions`.
 
+## 0.4.1 (2026-11-22)
+
+Commit: the one titled "Version 0.4.1" on GitHub.
+
+Removed
+- The Discord and Website buttons on the login screen, and the Website
+  button in About. They opened Aurora Viewer's Discord and site, not
+  Savage Viewer's. The GitHub button stays: it opens your own fork.
+
 ## 0.4.0 (2026-11-17)
 
 Commit: the one titled "Version 0.4.0" on GitHub.

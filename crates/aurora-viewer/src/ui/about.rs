@@ -283,7 +283,9 @@ fn hero(ui: &mut egui::Ui, p: &Palette, logo: Option<&egui::TextureHandle>) {
                     link(ui, p, "file-text-filled", aurora_i18n::tr!("about-release-notes"), &url);
                 }
                 link(ui, p, "brand-github-filled", "GitHub", crate::links::GITHUB);
-                link(ui, p, "world-filled", aurora_i18n::tr!("ui-login-website"), crate::links::WEBSITE);
+                if crate::links::UPSTREAM_LINKS {
+                    link(ui, p, "world-filled", aurora_i18n::tr!("ui-login-website"), crate::links::WEBSITE);
+                }
             });
         });
     });

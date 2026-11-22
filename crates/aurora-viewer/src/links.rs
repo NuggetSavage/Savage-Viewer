@@ -2,6 +2,12 @@
 //! button is shown disabled and nothing is fetched. The README header carries
 //! the same Discord and website links: change them there too.
 
+/// (Savage Viewer) Whether the upstream project's Discord and website
+/// buttons show (login screen, About). Off: they are Aurora Viewer's
+/// community and site, not this fork's. The tests keep them, as upstream
+/// draws them. Aurora's credit in About stays, as the licence asks.
+pub const UPSTREAM_LINKS: bool = cfg!(test);
+
 /// Source code repository (GitHub page).
 pub const GITHUB: &str = "https://github.com/NuggetSavage/savage-viewer";
 /// Savage Viewer's own: whether the interface offers "Report a bug" (the

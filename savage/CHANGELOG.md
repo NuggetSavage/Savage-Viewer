@@ -5,6 +5,15 @@ bar and in About. Each version below names its commit on GitHub (branch
 `savage`), which is the exact code of that version, and the build keeps a
 copy of each viewer in `C:\dev\savage-viewer-app\versions`.
 
+## 0.4.2 (2026-11-23)
+
+Commit: the one titled "Version 0.4.2" on GitHub.
+
+Changed
+- Nothing in the viewer itself. This is the first version built and
+  published by GitHub (Releases page of the fork), the first step toward
+  the Update button.
+
 ## 0.4.1 (2026-11-22)
 
 Commit: the one titled "Version 0.4.1" on GitHub.

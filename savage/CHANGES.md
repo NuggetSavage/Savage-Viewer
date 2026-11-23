@@ -5,6 +5,13 @@ every change of ours is on `savage` and is listed here, newest first, so a
 merge of upstream knows what to keep. Upstream's `TASKS.md` is left alone:
 it is rewritten daily there and any line of ours would conflict.
 
+## 2026-11-23: version 0.4.2 (releases built by GitHub)
+
+- `.github/workflows/savage-release.yml`: on a push to `savage` that
+  changes `savage/VERSION`, builds the Windows exe in release mode, tags
+  `v<version>` and publishes `savage-viewer-<version>.exe` with its
+  SHA-256. Not run before this push: the first run is its test.
+
 ## 2026-11-22: version 0.4.1 (no upstream Discord and website buttons)
 
 - `links.rs`: `UPSTREAM_LINKS` (`cfg!(test)`), read by `ui/login/chrome.rs`

@@ -1,0 +1,129 @@
+# Savage Viewer: builds and publishes a version.
+#
+# A push to the `savage` branch that changes `savage/VERSION` builds the
+# Windows viewer in release mode, tags the commit `v<version>` and publishes
+# a GitHub release holding `savage-viewer-<version>.exe` and its SHA-256.
+# The viewer's Update button reads these releases.
+#
+# The upstream Release workflow (release.yml) is not used: it publishes
+# three systems under upstream's names, and its package is a folder the
+# upstream updater swaps whole. A Savage Viewer installation keeps other
+# files beside the exe (a shader injector's, the older versions), so only
+# the exe is published and only the exe is replaced.
+#
+# The tag is made here, with the workflow's own token: a tag pushed with
+# that token starts no other workflow, so release.yml stays quiet.
+name: Savage release
+
+on:
+  push:
+    branches: [savage]
+    paths:
+      - savage/VERSION
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# one release at a time; a second push waits for the first
+concurrency:
+  group: savage-release
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # the version is read from Git (aurora-version): the whole history
+          fetch-depth: 0
+      - name: Version
+        id: version
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Get-Content -LiteralPath savage/VERSION -Raw).Trim()
+          if ($version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { throw "savage/VERSION holds no version: '$version'" }
+          $tag = "v$version"
+          # a version is published once: a second run of the same number stops here
+          gh release view $tag --repo $env:GITHUB_REPOSITORY 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $tag exists already: nothing to do."
+            "publish=false" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+          $global:LASTEXITCODE = 0
+          # the tag may be left from a run that failed after pushing it: it
+          # must then be this very commit
+          $existing = (git rev-parse -q --verify "refs/tags/$tag^{commit}" 2>$null)
+          $head = (git rev-parse HEAD)
+          if ($existing -and $existing -ne $head) { throw "Tag $tag exists on another commit ($existing); raise savage/VERSION." }
+          if (-not $existing) {
+            git tag $tag
+            if ($LASTEXITCODE -ne 0) { throw "git tag failed" }
+          }
+          $global:LASTEXITCODE = 0
+          "publish=true" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          Write-Host "Building Savage Viewer $version ($head)"
+      - name: Rust stable
+        if: steps.version.outputs.publish == 'true'
+        run: rustup update stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        if: steps.version.outputs.publish == 'true'
+      # the same command as the build on the user's PC (savage/savage-build.ps1)
+      - name: Build
+        if: steps.version.outputs.publish == 'true'
+        shell: pwsh
+        env:
+          AURORA_VERSION_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          cargo build --release --locked -p aurora-viewer
+          if ($LASTEXITCODE -ne 0) { throw "cargo build failed ($LASTEXITCODE)" }
+      - name: Verify and package
+        if: steps.version.outputs.publish == 'true'
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $built = (Resolve-Path -LiteralPath target/release/aurora-viewer.exe -ErrorAction Stop).Path
+          $reported = (& $built --version | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0) { throw "The viewer could not report its version (code $LASTEXITCODE)." }
+          $expected = "Savage Viewer $env:VERSION"
+          if ($reported -cne $expected) { throw "Built version mismatch: expected '$expected', got '$reported'." }
+          $exe = "savage-viewer-$env:VERSION.exe"
+          Copy-Item -LiteralPath $built -Destination $exe -ErrorAction Stop
+          $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          # utf8NoBOM: the viewer reads the first 64 characters as the hash
+          "$hash  $exe" | Set-Content -LiteralPath "$exe.sha256" -Encoding utf8NoBOM
+          # the notes: this version's section of the changelog
+          $notes = @()
+          $inside = $false
+          foreach ($line in Get-Content -LiteralPath savage/CHANGELOG.md) {
+            if ($line -match '^## ') {
+              if ($inside) { break }
+              $inside = $line -match ('^## ' + [regex]::Escape($env:VERSION) + '(\s|$)')
+              continue
+            }
+            if ($inside) { $notes += $line }
+          }
+          if (-not $notes) { $notes = @("Savage Viewer $env:VERSION") }
+          [IO.File]::WriteAllLines((Join-Path $PWD 'release-notes.md'), $notes, [Text.UTF8Encoding]::new($false))
+          Write-Host "$exe $([math]::Round((Get-Item $exe).Length / 1MB)) MB, sha256 $hash"
+          "EXE=$exe" >> $env:GITHUB_ENV
+      - name: Publish
+        if: steps.version.outputs.publish == 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git push origin "refs/tags/$env:TAG"
+          if ($LASTEXITCODE -ne 0) { throw "The tag could not be pushed ($LASTEXITCODE)." }
+          gh release create $env:TAG $env:EXE "$($env:EXE).sha256" --repo $env:GITHUB_REPOSITORY --verify-tag --title "Savage Viewer $env:VERSION" --notes-file release-notes.md
+          if ($LASTEXITCODE -ne 0) { throw "The release could not be created ($LASTEXITCODE)." }

@@ -578,6 +578,37 @@ fn version_panel(ui: &mut egui::Ui, p: &Palette, icons: &Icons, info: &LoginInfo
                     .on_hover_text(aurora_i18n::tr!("update-check-hint"))
                     .clicked();
         }
+        // (Savage Viewer) the fork's own update: its button installs
+        if let Some(status) = info.savage {
+            ui.add_space(8.0);
+            let size = Vec2::new(ui.available_width(), 30.0);
+            let version = match &info.version {
+                VersionState::Available { version, .. } => version.clone(),
+                _ => String::new(),
+            };
+            match status {
+                crate::ui::news::SavageUpdate::Downloading(part) => {
+                    // the bar writes the percentage it shows in the `{}`
+                    let text = aurora_i18n::tr!("savage-update-downloading", percent = "{}");
+                    widgets::progress(ui, p, "savage_update", part, size.x, &text, None);
+                }
+                crate::ui::news::SavageUpdate::Installed => {
+                    ui.label(RichText::new(aurora_i18n::tr!("savage-update-installed")).size(12.0).color(p.muted));
+                }
+                crate::ui::news::SavageUpdate::Offer | crate::ui::news::SavageUpdate::Failed => {
+                    if status == crate::ui::news::SavageUpdate::Failed {
+                        ui.label(RichText::new(aurora_i18n::tr!("savage-update-failed")).size(12.0).color(p.muted));
+                        ui.add_space(4.0);
+                    }
+                    let label = aurora_i18n::tr!("savage-update-install", version = version);
+                    let button = widgets::action_button(ui, p, "download-filled", &label, ActionKind::Primary, size)
+                        .on_hover_text(aurora_i18n::tr!("savage-update-install-tip"));
+                    if button.clicked() {
+                        ui.ctx().data_mut(|d| d.insert_temp(crate::savage_update::click_id(), true));
+                    }
+                }
+            }
+        }
         if let VersionState::Available { url, .. } = &info.version
             && !url.is_empty()
         {

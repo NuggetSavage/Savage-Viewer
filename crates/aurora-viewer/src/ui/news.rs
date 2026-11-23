@@ -240,10 +240,26 @@ pub enum VersionState {
     Failed,
 }
 
+/// (Savage Viewer) What the Version panel shows of the fork's own update
+/// (`crate::savage_update`), under an `Available` version.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SavageUpdate {
+    /// The Update button.
+    Offer,
+    /// The part downloaded, 0 to 1.
+    Downloading(f32),
+    /// The download or the installation failed; the button tries again.
+    Failed,
+    /// The new version is in place; it runs at the next start.
+    Installed,
+}
+
 pub struct LoginInfo {
     pub news: Vec<NewsItem>,
     pub version: VersionState,
     pub can_check_updates: bool,
+    /// (Savage Viewer) None: no update of the fork to show.
+    pub savage: Option<SavageUpdate>,
     /// UI language of `news`: they follow a change made in the preferences.
     language: &'static str,
     /// `None` where nothing is downloaded: demo, updater test, previews.
@@ -284,6 +300,7 @@ impl LoginInfo {
                 url: String::new(),
             },
             can_check_updates: true,
+            savage: None,
             language,
             feed: None,
         }
@@ -307,6 +324,7 @@ impl LoginInfo {
             news: Vec::new(),
             version: VersionState::NotConfigured,
             can_check_updates: false,
+            savage: None,
             language,
             feed,
         };

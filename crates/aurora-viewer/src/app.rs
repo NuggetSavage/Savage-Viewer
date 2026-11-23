@@ -903,6 +903,10 @@ pub struct App {
     login_info: ui::news::LoginInfo,
     update_demo: Option<ui::update::UpdateDemo>,
     updater: crate::updater::Updater,
+    /// (Savage Viewer) The fork's own update, from its GitHub releases.
+    savage_update: crate::savage_update::Updater,
+    /// (Savage Viewer) The updated exe to start once this viewer has closed.
+    start_after_update: Option<std::path::PathBuf>,
     /// Aurora's media plugins pack: installed, downloading or missing.
     plugin_pack: crate::media::pack::PluginPack,
     update_acknowledged: bool,
@@ -1801,6 +1805,8 @@ impl App {
             voice_http,
             update_demo,
             updater,
+            savage_update: crate::savage_update::Updater::new(),
+            start_after_update: None,
             plugin_pack,
             update_acknowledged: false,
             login_info,
@@ -6108,6 +6114,8 @@ impl App {
         Settings::wait_saved(Duration::from_secs(5));
         if self.restart_into_vr {
             restart_with_vr();
+        } else if let Some(exe) = self.start_after_update.take() {
+            crate::savage_update::start(&exe);
         }
         event_loop.exit();
     }
@@ -8889,6 +8897,17 @@ impl App {
             }
         }
         if self.updater.poll(&mut self.settings, &mut self.login_info, self.net.runtime()) {
+            self.shutdown(event_loop);
+            return;
+        }
+        // (Savage Viewer) after upstream's, which is off here: the Version
+        // panel shows the fork's releases
+        let on_login_screen = !self.in_world() && !self.login_form.busy;
+        if let Some(exe) = self
+            .savage_update
+            .frame(&mut self.login_info, &self.egui_ctx, self.net.runtime(), on_login_screen)
+        {
+            self.start_after_update = Some(exe);
             self.shutdown(event_loop);
             return;
         }
@@ -13557,7 +13576,10 @@ impl App {
             return;
         }
         match a.login {
+            // (Savage Viewer) an update being installed ends in a restart
+            LoginAction::Login if self.savage_update.busy() => {}
             LoginAction::Login if !self.updater.blocks_login() && aurora_updater::test_environment().is_none() => self.start_login(),
+            LoginAction::CheckUpdates if self.savage_update.enabled() => self.savage_update.check(self.net.runtime()),
             LoginAction::CheckUpdates => self.updater.check(self.net.runtime(), true),
             LoginAction::ReportBug => self.open_issue_chooser(),
             LoginAction::CopyVersion => self.copy_version(),
@@ -15271,7 +15293,8 @@ impl App {
                 self.login_form.block_reason = self
                     .updater
                     .login_block_reason()
-                    .or_else(|| aurora_updater::test_environment().map(|_| aurora_i18n::tr!("update-login-test")));
+                    .or_else(|| aurora_updater::test_environment().map(|_| aurora_i18n::tr!("update-login-test")))
+                    .or_else(|| self.savage_update.busy().then(|| aurora_i18n::tr!("savage-update-login-wait")));
                 self.command_line_login();
                 self.poll_login_wait(&ctx);
                 let progress = self.login_progress.as_ref().map(|(m, f)| (m.as_str(), *f));

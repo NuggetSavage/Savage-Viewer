@@ -5,6 +5,31 @@ every change of ours is on `savage` and is listed here, newest first, so a
 merge of upstream knows what to keep. Upstream's `TASKS.md` is left alone:
 it is rewritten daily there and any line of ours would conflict.
 
+## 2026-11-23: the viewer updates itself from the fork's releases
+
+- **New crate `savage-update`:** what a release of the fork is (tag
+  `v<major>.<minor>.<patch>`, assets `savage-viewer-<version>.exe` and its
+  `.sha256`, both under this repository's release downloads), whether it
+  is newer than the running version, the hash file's parsing, and
+  `install`, the swap of the exe (running version kept in `versions/`,
+  running exe moved aside, new one renamed into place, rollback).
+- **`crates/aurora-viewer/src/savage_update.rs`:** the check at start, the
+  download beside the exe (size and SHA-256 checked), the install off the
+  frame thread, the Version panel's state. Windows, release build, exe
+  named `savage-viewer.exe` only. Signing in waits for a download; the new
+  exe is started at the end of `App::shutdown`, after the settings are
+  written.
+- **Why not upstream's updater:** it replaces the whole folder and refuses
+  one holding other files; this folder holds a shader injector's files and
+  the kept versions. Upstream's stays off (`UPSTREAM_FEED`).
+- **Trust:** HTTPS to GitHub and the fork's account. The hash comes from
+  the same release as the exe: it catches a damaged file, not a release
+  published by someone else. The exe is not signed.
+- **Limit:** an exe downloaded by hand from the Releases page keeps its
+  versioned name and does not update itself; rename it `savage-viewer.exe`.
+- `savage-release.yml`: the version check refuses numbers with a leading
+  zero (the viewer would not see such a release).
+
 ## 2026-11-23: version 0.4.2 (releases built by GitHub)
 
 - `.github/workflows/savage-release.yml`: on a push to `savage` that

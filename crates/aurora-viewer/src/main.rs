@@ -81,6 +81,7 @@ mod own_motion;
 mod physics_editor;
 mod raw_mouse;
 mod report_abuse;
+mod savage_update;
 mod scene;
 mod screen_rate;
 mod settings;

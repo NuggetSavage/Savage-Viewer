@@ -46,7 +46,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $version = (Get-Content -LiteralPath savage/VERSION -Raw).Trim()
-          if ($version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { throw "savage/VERSION holds no version: '$version'" }
+          if ($version -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') { throw "savage/VERSION holds no version: '$version'" }
           $tag = "v$version"
           # a version is published once: a second run of the same number stops here
           gh release view $tag --repo $env:GITHUB_REPOSITORY 2>$null | Out-Null

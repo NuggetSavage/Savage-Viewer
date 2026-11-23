@@ -30,6 +30,8 @@ aurora-audio = { version = "0.1.0", path = "../aurora-audio" }
 aurora-llsd = { version = "0.1.0", path = "../aurora-llsd" }
 # Savage Viewer: reads the graphics presets other viewers wrote (Black Dragon, Firestorm)
 savage-presets = { version = "0.1.0", path = "../savage-presets" }
+# Savage Viewer: what a release of the fork is (the Update button)
+savage-update = { version = "0.1.0", path = "../savage-update" }
 aurora-media = { version = "0.1.0", path = "../aurora-media" }
 aurora-net = { version = "0.1.0", path = "../aurora-net" }
 aurora-prim = { version = "0.1.0", path = "../aurora-prim" }
@@ -90,7 +92,7 @@ winit = "0.30"
 ron = "0.12.2"
 flate2 = "1.1.10"
 zip = { version = "9.0.1", default-features = false, features = ["deflate-flate2"] }
-tokio = { version = "1", default-features = false, features = ["rt"] }
+tokio = { version = "1", default-features = false, features = ["rt", "time"] }
 sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }
 serde_path_to_error = "0.1.20"
 # MikkTSpace tangents of the meshes' normal maps (scene/tangents.rs): safe

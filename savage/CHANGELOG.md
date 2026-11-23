@@ -5,6 +5,25 @@ bar and in About. Each version below names its commit on GitHub (branch
 `savage`), which is the exact code of that version, and the build keeps a
 copy of each viewer in `C:\dev\savage-viewer-app\versions`.
 
+## 0.4.3 (2026-11-23)
+
+Commit: the one titled "Version 0.4.3" on GitHub.
+
+Added
+- An Update button on the login screen, in the Version box. When a newer
+  Savage Viewer is published on the fork's GitHub Releases page, the box
+  shows it and the button downloads it, checks the file, replaces
+  `savage-viewer.exe` and restarts the viewer. Nothing else in the folder
+  is touched (the shader files, your presets and your settings stay as
+  they are), and the version you were running is kept in the `versions`
+  folder.
+- "Check for updates" in the same box now asks the Savage Viewer releases.
+- While an update downloads, Log in waits: the viewer restarts when the
+  update is done.
+
+Not yet seen working on a PC: the first real update (from 0.4.3 to the
+version after it) is the test.
+
 ## 0.4.2 (2026-11-23)
 
 Commit: the one titled "Version 0.4.2" on GitHub.

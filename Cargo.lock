@@ -755,6 +755,7 @@ dependencies = [
  "ron",
  "roxmltree 0.21.1",
  "savage-presets",
+ "savage-update",
  "serde",
  "serde_json",
  "serde_path_to_error",
@@ -5593,6 +5594,14 @@ name = "savage-presets"
 version = "0.1.0"
 dependencies = [
  "aurora-llsd",
+]
+
+[[package]]
+name = "savage-update"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

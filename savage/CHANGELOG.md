@@ -5,6 +5,19 @@ bar and in About. Each version below names its commit on GitHub (branch
 `savage`), which is the exact code of that version, and the build keeps a
 copy of each viewer in `C:\dev\savage-viewer-app\versions`.
 
+## 0.4.4 (2026-11-23)
+
+Commit: the one titled "Version 0.4.4" on GitHub.
+
+Changed
+- Nothing you can see. The viewer now writes a line in its log each time
+  it has to rebuild its screen output because Windows refused the next
+  picture. This is to find the cause of the flicker with a GShade shader
+  on in photo mode: GShade's log showed the viewer rebuilding its output
+  about 7 times a second during the flicker, and the viewer's log said
+  nothing about it.
+- First version meant to arrive through the Update button.
+
 ## 0.4.3 (2026-11-23)
 
 Commit: the one titled "Version 0.4.3" on GitHub.

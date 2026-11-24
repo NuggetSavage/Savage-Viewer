@@ -76,6 +76,30 @@ pub(crate) fn configure(surface: &wgpu::Surface<'_>, device: &wgpu::Device, conf
     surface.configure(device, config);
 }
 
+/// (Savage Viewer) Notes that the surface refused to give its next image
+/// (out of date, or lost) and is configured again for it. Written to the
+/// log at most once a second, with how many there were since the last line:
+/// one after a resize is ordinary, several a second for a while is a loop.
+pub(crate) fn note_refused(lost: bool, size: (u32, u32), external: bool) {
+    static SINCE: AtomicU64 = AtomicU64::new(0);
+    static LAST_MS: AtomicU64 = AtomicU64::new(0);
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    let count = SINCE.fetch_add(1, Ordering::Relaxed) + 1;
+    let now = START.get_or_init(std::time::Instant::now).elapsed().as_millis() as u64 + 1000;
+    let last = LAST_MS.load(Ordering::Relaxed);
+    if now.saturating_sub(last) >= 1000 && LAST_MS.compare_exchange(last, now, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
+        SINCE.store(0, Ordering::Relaxed);
+        log::warn!(
+            "presentation: the surface gave no image ({}), {count} time(s) since the last such line; configured again at {} x {}{} ({} recreations since the start)",
+            if lost { "lost" } else { "out of date" },
+            size.0,
+            size.1,
+            if external { ", external surface" } else { "" },
+            recreations()
+        );
+    }
+}
+
 /// Swapchain recreations since the start.
 pub fn recreations() -> u64 {
     RECREATIONS.load(Ordering::Relaxed)

@@ -6438,7 +6438,15 @@ impl Backend {
         } else {
             match self.surface.get_current_texture() {
                 wgpu::CurrentSurfaceTexture::Success(t) | wgpu::CurrentSurfaceTexture::Suboptimal(t) => Some(FrameTarget::Surface(t)),
-                wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
+                state @ (wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost) => {
+                    // (Savage Viewer) said in the log: a run of these with a
+                    // shader injector loaded restarts its shaders each time
+                    // (seen as flicker), and nothing told why
+                    crate::present::note_refused(
+                        matches!(state, wgpu::CurrentSurfaceTexture::Lost),
+                        (self.config.width, self.config.height),
+                        self.external,
+                    );
                     if !self.external {
                         crate::present::configure(&self.surface, &self.device, &self.config);
                     }

@@ -5,6 +5,16 @@ every change of ours is on `savage` and is listed here, newest first, so a
 merge of upstream knows what to keep. Upstream's `TASKS.md` is left alone:
 it is rewritten daily there and any line of ours would conflict.
 
+## 2026-11-23: the log says when the surface refuses its image
+
+- `aurora-render/src/present.rs` `note_refused`, called from the
+  `Outdated | Lost` branch of `Renderer::render`: one warning a second at
+  most, with the count, the kind and the configured size. Diagnosis only:
+  a shader injector's log showed about 7.5 swapchain creations a second
+  for 97 s and for 13 s, same extent and present mode each time, while a
+  photo window was open; by the call sites, only this branch configures
+  the surface without a size or vsync change. The cause is not known.
+
 ## 2026-11-23: the viewer updates itself from the fork's releases
 
 - **New crate `savage-update`:** what a release of the fork is (tag

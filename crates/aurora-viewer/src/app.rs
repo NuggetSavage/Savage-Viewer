@@ -9304,6 +9304,7 @@ impl App {
         // a photo drawn at its own size this frame: its proportions, the
         // part of it this frame draws, the height its details are chosen for
         self.photo_update(&gfx.renderer);
+        self.photo_screen_grab(&gfx.window);
         self.viewfinder_frame(&mut gfx.renderer);
         self.photo_isolate_frame(&mut gfx.renderer);
         let photo = self.photo_frame(&mut gfx.renderer);
@@ -11289,6 +11290,11 @@ impl App {
         if std::mem::take(&mut self.egui_replay) {
             log::info!("GPU recovery: egui's textures sent again ({} KB)", self.egui_shadow.bytes() >> 10);
             textures = self.egui_shadow.replay(textures);
+        }
+        // (Savage Viewer) a photo of the screen: nothing of the interface is
+        // drawn on the frames it waits for
+        if self.photo_screen_hides_interface() {
+            full.shapes.clear();
         }
         let egui_frame = self
             .egui_hand_over

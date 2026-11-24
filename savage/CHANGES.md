@@ -5,6 +5,27 @@ every change of ours is on `savage` and is listed here, newest first, so a
 merge of upstream knows what to keep. Upstream's `TASKS.md` is left alone:
 it is rewritten daily there and any line of ours would conflict.
 
+## 2026-11-23: a photo of the screen, for a shader injector's effects
+
+- **Why:** GShade and ReShade draw on the presented swapchain image; the
+  viewer's photo is drawn apart and a presented image cannot be read
+  back. The only picture with the effects is the one on the desktop.
+- **`snapshot/screen.rs`:** `grab` (Windows, GDI `BitBlt` of the window's
+  client area from the screen), `crop_to` (the centered part with the
+  photo's proportions, which is where the viewfinder's frame and
+  `Camera::photo_proj` put it).
+- **`App::photo_take`** arms it when `snapshot.screen_shader` is on (disk,
+  no chosen path, no freeze frame); `app.rs` clears the interface's shapes
+  while it waits; `App::photo_screen_grab` reads the screen after 6 frames
+  and 250 ms, gives up after 3 s or when the viewer is not in front, and
+  waits for a paused 3D view. It counts as a photo in progress.
+- **Stricter or looser than the viewer's photo:** no asset or permission
+  is involved; RLVa's overlays are renderer effects and stay on the
+  picture. "Interface on the photo" is ignored (always off), HUDs and
+  filters are as the screen shows them.
+- **Not verified:** the Windows code was not compiled before GitHub's
+  build; exclusive fullscreen, HDR screens.
+
 ## 2026-11-23: the log says when the surface refuses its image
 
 - `aurora-render/src/present.rs` `note_refused`, called from the

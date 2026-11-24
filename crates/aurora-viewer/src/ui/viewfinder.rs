@@ -2348,6 +2348,18 @@ fn tiles(s: &Settings, panel: &SnapshotUi, f: &Frame) -> Vec<(&'static str, Stri
             None
         }),
     ));
+    // (Savage Viewer) the photo is what the screen shows, shader effects
+    // included; only to disk, only where the screen can be read
+    if crate::snapshot::screen::supported() && panel.destination == Destination::Disk {
+        v.push((
+            aurora_i18n::tr!("photo-screen-shader"),
+            yes_no(s.screen_shader),
+            Box::new(|s, _| {
+                s.screen_shader = !s.screen_shader;
+                None
+            }),
+        ));
+    }
     v.push((
         aurora_i18n::tr!("photo-huds"),
         on_off(s.huds, aurora_i18n::tr!("photo-vf-visible"), aurora_i18n::tr!("photo-vf-hidden")).to_owned(),

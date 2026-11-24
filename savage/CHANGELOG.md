@@ -5,6 +5,22 @@ bar and in About. Each version below names its commit on GitHub (branch
 `savage`), which is the exact code of that version, and the build keeps a
 copy of each viewer in `C:\dev\savage-viewer-app\versions`.
 
+## 0.4.5 (2026-11-23)
+
+Commit: the one titled "Version 0.4.5" on GitHub.
+
+Added
+- "Screen shader" for photos: with it on, a photo taken to disk is what the
+  screen shows, with the GShade (or ReShade) effects on it. Turn it on in
+  photo mode's quick menu (Tab, the "Screen shader" tile) or in the photo
+  window under File. Off by default.
+- How it differs from a normal photo: it is the size of the viewer's
+  window, not 4K or 8K; the interface disappears for about a quarter of a
+  second while it is taken; the viewer has to be the window in front. A
+  freeze frame and "Save as" stay without the effects.
+
+Not yet seen working on a PC.
+
 ## 0.4.4 (2026-11-23)
 
 Commit: the one titled "Version 0.4.4" on GitHub.

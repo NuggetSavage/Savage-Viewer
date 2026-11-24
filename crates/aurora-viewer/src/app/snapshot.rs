@@ -188,6 +188,9 @@ pub(super) struct Snapshots {
     /// A photo to disk asked while the renderer draws the frame (the
     /// toolbar's Snapshot to disk): taken by the next `photo_update`.
     to_disk: bool,
+    /// (Savage Viewer) A photo of the screen is being taken: the frames
+    /// drawn without the interface so far, and since when.
+    screen_grab: Option<(u32, Instant)>,
     /// The price to confirm before the upload.
     pub(super) confirm: Option<i32>,
     /// The price the balance cannot pay.
@@ -428,6 +431,7 @@ impl Default for Snapshots {
             look_focus: None,
             quiet: false,
             to_disk: false,
+            screen_grab: None,
             confirm: None,
             short: None,
             quality_ask: false,
@@ -1329,7 +1333,12 @@ impl App {
     /// A photo is being taken, saved or uploaded.
     pub(super) fn photo_busy(&self) -> bool {
         let s = &self.snapshots;
-        s.saving.is_some() || s.upload.is_some() || s.detail_wait.is_some() || s.job.as_ref().is_some_and(|j| j.purpose != Purpose::Preview)
+        s.saving.is_some()
+            || s.upload.is_some()
+            || s.detail_wait.is_some()
+            // (Savage Viewer) a photo of the screen on its way saves like one
+            || s.screen_grab.is_some()
+            || s.job.as_ref().is_some_and(|j| j.purpose != Purpose::Preview)
     }
 
     /// Upload prices: the account's benefits (texture_upload_cost, by area
@@ -1554,7 +1563,85 @@ impl App {
             self.photo_save(size, rgba, chosen, cutout);
             return;
         }
+        // (Savage Viewer) the screen as it is, shader effects included: the
+        // interface leaves the next frames, then `photo_screen_grab` reads
+        // the window from the desktop. A freeze frame (above) and "Save
+        // as" stay the viewer's own photo, drawn apart: the screen has
+        // moved on from the first, and the second waits behind a dialog.
+        if chosen.is_none() && self.settings.snapshot.screen_shader && snapshot::screen::supported() {
+            if self.snapshots.screen_grab.is_none() {
+                log::info!("photo: of the screen, the interface left out of the next frames");
+                // the outlines of a choice in the scene are not on a photo
+                self.world.photo_isolation.set_picking(false);
+                self.snapshots.screen_grab = Some((0, Instant::now()));
+            }
+            return;
+        }
         self.photo_job(Purpose::Save(chosen), renderer);
+    }
+
+    /// (Savage Viewer) Whether this frame's interface is left out: a photo
+    /// of the screen is on its way.
+    pub(super) fn photo_screen_hides_interface(&self) -> bool {
+        self.snapshots.screen_grab.is_some()
+    }
+
+    /// (Savage Viewer) Every frame while a photo of the screen is on its
+    /// way: once a few frames without the interface have reached the screen
+    /// (the compositor shows a frame one or two refreshes after it is
+    /// presented, and an injector draws on each), the window is read from
+    /// the desktop, cut to the photo's proportions and saved like any photo.
+    pub(super) fn photo_screen_grab(&mut self, window: &winit::window::Window) {
+        /// Frames drawn without the interface before the screen is read.
+        const FRAMES: u32 = 6;
+        /// And the time they are given to reach the screen.
+        const SETTLE: Duration = Duration::from_millis(250);
+        /// The longest the interface stays out for it.
+        const GIVE_UP: Duration = Duration::from_secs(3);
+        let Some((frames, since)) = self.snapshots.screen_grab else {
+            return;
+        };
+        let waited = since.elapsed();
+        // what is read is the desktop where the window is: another window
+        // over it, or the viewer in the background, would be photographed
+        let in_front = window.has_focus() && !self.occluded && window.is_minimized() != Some(true);
+        let failure = if !in_front {
+            Some("the viewer is not the window in front")
+        } else if waited > GIVE_UP {
+            Some("the frames did not reach the screen in time")
+        } else {
+            None
+        };
+        if let Some(why) = failure {
+            self.snapshots.screen_grab = None;
+            log::warn!("photo: of the screen, given up: {why}");
+            self.snapshots.message = Some((aurora_i18n::tr!("photo-screen-failed").to_owned(), true));
+            return;
+        }
+        // a paused 3D view (a reduced, sky-only frame) is not the photo:
+        // the count starts again once it draws, as the viewer's own photo
+        // waits for it (`photo_frame`)
+        if self.drawing_paused() {
+            self.snapshots.screen_grab = Some((0, since));
+            return;
+        }
+        let frames = frames + 1;
+        if frames < FRAMES || waited < SETTLE {
+            self.snapshots.screen_grab = Some((frames, since));
+            return;
+        }
+        self.snapshots.screen_grab = None;
+        match snapshot::screen::grab(window) {
+            Ok((size, rgba)) => {
+                let (size, rgba) = snapshot::screen::crop_to(size, rgba, self.photo_size(size));
+                log::info!("photo: of the screen, {} x {}", size.0, size.1);
+                self.photo_save(size, rgba, None, false);
+            }
+            Err(e) => {
+                log::warn!("photo: the screen could not be read: {e}");
+                self.snapshots.message = Some((aurora_i18n::tr!("photo-screen-failed").to_owned(), true));
+            }
+        }
     }
 
     /// "Take a photo to disk" (Firestorm Ctrl+`): the settings of the photo

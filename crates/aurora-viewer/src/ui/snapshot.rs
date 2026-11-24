@@ -749,6 +749,18 @@ impl SnapshotUi {
             row(ui, p, aurora_i18n::tr!("photo-timestamp"), None, |ui| {
                 widgets::switch(ui, p, &mut s.timestamp_names);
             });
+            // (Savage Viewer) where the screen can be read (Windows)
+            if crate::snapshot::screen::supported() {
+                row(
+                    ui,
+                    p,
+                    aurora_i18n::tr!("photo-screen-shader"),
+                    Some(aurora_i18n::tr!("photo-screen-shader-hint")),
+                    |ui| {
+                        widgets::switch(ui, p, &mut s.screen_shader);
+                    },
+                );
+            }
             row(
                 ui,
                 p,

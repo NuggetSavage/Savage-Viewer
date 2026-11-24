@@ -20,6 +20,7 @@ pub mod profile;
 pub mod quality;
 pub mod reel;
 pub mod save;
+pub mod screen;
 pub mod viewfinder;
 
 use glam::{Mat4, Vec4};
@@ -225,6 +226,10 @@ pub struct Settings {
     pub auto_refresh: bool,
     /// Date and time in the file name.
     pub timestamp_names: bool,
+    /// (Savage Viewer) A photo to disk is what the screen shows, with the
+    /// effects a shader injector (GShade, ReShade) draws on it, at the
+    /// window's size (`screen.rs`). Windows only.
+    pub screen_shader: bool,
     /// Folder of the photos; None: the pictures folder.
     pub folder: Option<PathBuf>,
     /// Keep the folder chosen in "Save as" for the next sessions.
@@ -284,6 +289,7 @@ impl Default for Settings {
             huds: false,
             auto_refresh: false,
             timestamp_names: true,
+            screen_shader: false,
             folder: None,
             remember_folder: true,
             base_name: "Snapshot".into(),

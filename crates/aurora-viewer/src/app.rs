@@ -15378,8 +15378,17 @@ impl App {
                         self.flush_build();
                     }
                     self.photo_ui(&ctx, &p, projector, renderer);
+                    // (Savage Viewer) the viewfinder's Hidden display hides
+                    // these two windows as well, minimized or not, and the
+                    // poser's joint markers with it: the pose and the light
+                    // stay, the view is the photo's
+                    let clean =
+                        self.viewfinder_on() && self.settings.snapshot.viewfinder.display == crate::snapshot::viewfinder::Display::Hidden;
+                    if clean {
+                        self.ik_editor.hidden_frame();
+                    }
                     // the poser stays over it (#1389): pose, then shoot
-                    if self.ik_editor.open && self.ik_editor.posing() {
+                    if !clean && self.ik_editor.open && self.ik_editor.posing() {
                         // no bars here: its room is the whole window, as
                         // large as it is now (the bars' room of the last
                         // frame with them would keep an older window size)
@@ -15392,7 +15401,7 @@ impl App {
                     }
                     // Personal Lighting, opened from the light panel, stays
                     // over it too: the photo's light refined without leaving
-                    if self.panels.personal_lighting {
+                    if !clean && self.panels.personal_lighting {
                         let screen = ctx.content_rect();
                         ui::layout::set_work_area(&ctx, screen);
                         ui::layout::set_move_area(&ctx, screen);

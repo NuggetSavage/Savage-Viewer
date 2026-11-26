@@ -5,6 +5,15 @@ every change of ours is on `savage` and is listed here, newest first, so a
 merge of upstream knows what to keep. Upstream's `TASKS.md` is left alone:
 it is rewritten daily there and any line of ours would conflict.
 
+## 2026-11-25: the viewfinder's Hidden display hides the poser and Personal lighting
+
+- `app.rs`, the full-frame branch of `Screen::World`: with
+  `Display::Hidden` the poser (`ik_editor.show`) and Personal lighting are
+  not drawn; `IkEditor::hidden_frame` drops the pointer and any drag so
+  the camera is free. The pose is applied apart (`pose_layers`) and stays.
+  Upstream keeps both windows over the viewfinder in every display (#1389);
+  this is the fork's choice for the display whose purpose is a clean view.
+
 ## 2026-11-23: a photo of the screen, for a shader injector's effects
 
 - **Why:** GShade and ReShade draw on the presented swapchain image; the

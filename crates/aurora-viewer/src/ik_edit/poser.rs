@@ -156,6 +156,15 @@ impl Editor {
     /// A press on the scene now goes to a poser handle. The handles are
     /// painted in egui's Background layer, which the app does not count as
     /// UI, so the app asks before giving the press to a worn HUD.
+    /// (Savage Viewer) A frame on which the poser is not drawn (the
+    /// viewfinder's Hidden display): nothing of it holds the pointer or a
+    /// drag meanwhile. The pose stays (`pose_layers`).
+    pub fn hidden_frame(&mut self) {
+        self.poser.pointer_owned = false;
+        self.drag = None;
+        self.gizmo.cancel();
+        self.poser.scale_gizmo.cancel();
+    }
     pub fn poser_owns_pointer(&self) -> bool {
         self.poser.active && self.poser.pointer_owned
     }

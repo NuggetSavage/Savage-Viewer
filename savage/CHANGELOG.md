@@ -5,6 +5,18 @@ bar and in About. Each version below names its commit on GitHub (branch
 `savage`), which is the exact code of that version, and the build keeps a
 copy of each viewer in `C:\dev\savage-viewer-app\versions`.
 
+## 0.4.6 (2026-11-25)
+
+Commit: the one titled "Version 0.4.6" on GitHub.
+
+Changed
+- Photo mode, the I key's third press (everything hidden): the poser
+  window and the Personal lighting window are now hidden too, open or
+  minimized, and so are the poser's joint markers. The pose and the light
+  stay as they are. Press I again to bring them back.
+
+Not yet seen working on a PC.
+
 ## 0.4.5 (2026-11-23)
 
 Commit: the one titled "Version 0.4.5" on GitHub.

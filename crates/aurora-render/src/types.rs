@@ -1385,6 +1385,10 @@ pub struct FrameParams {
     pub tonemap_mix: f32,
     /// Contrast adaptive sharpening strength (0 = off; Firestorm RenderCASSharpness).
     pub sharpen: f32,
+    /// (Savage Viewer) Vibrance of the picture, -1 to 1 (0 = none).
+    pub vibrance: f32,
+    /// (Savage Viewer) Saturation of the picture, 0 to 2 (1 = none).
+    pub saturation: f32,
     /// Screen-space glow of faces with a glow value (RenderGlow).
     pub glow: bool,
     /// Aurora's bloom (bloom.rs): the share of the light over the

@@ -774,6 +774,35 @@ fn light(cx: &mut Cx) {
                 .changed()
             },
         );
+        // Savage Viewer's own: the picture's colour, drawn last (post.wgsl)
+        cx.keywords("colour color vivid").row(
+            tr!("ui-options-vibrance"),
+            tr!("ui-options-vibrance-help"),
+            &field!(vibrance),
+            |ui, s| {
+                ui.add(
+                    egui::Slider::new(&mut s.vibrance, crate::settings::VIBRANCE_RANGE)
+                        .custom_parser(aurora_i18n::parse_number)
+                        .step_by(0.01)
+                        .trailing_fill(true),
+                )
+                .changed()
+            },
+        );
+        cx.keywords("colour color gray grey black white").row(
+            tr!("ui-options-saturation"),
+            tr!("ui-options-saturation-help"),
+            &field!(saturation),
+            |ui, s| {
+                ui.add(
+                    egui::Slider::new(&mut s.saturation, crate::settings::SATURATION_RANGE)
+                        .custom_parser(aurora_i18n::parse_number)
+                        .step_by(0.01)
+                        .trailing_fill(true),
+                )
+                .changed()
+            },
+        );
         cx.toggle(
             tr!("ui-options-glow"),
             tr!("ui-options-glow-around-glowing-faces-as-in-firestorm"),

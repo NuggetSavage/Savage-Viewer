@@ -199,6 +199,8 @@ struct PostU {
     _pad: f32,
     /// The part of the photo the frame draws ([`photo_part`]).
     photo_part: [f32; 4],
+    /// (Savage Viewer) x vibrance, y saturation (`color_grade`, post.wgsl).
+    grade: [f32; 4],
 }
 
 /// Where `PostU::auto_exposure` sits in the post uniforms.
@@ -7072,6 +7074,16 @@ impl Backend {
             },
             _pad: 0.0,
             photo_part: photo_part(f.photo_tile),
+            grade: [
+                if f.vibrance.is_finite() { f.vibrance.clamp(-1.0, 1.0) } else { 0.0 },
+                if f.saturation.is_finite() {
+                    f.saturation.clamp(0.0, 2.0)
+                } else {
+                    1.0
+                },
+                0.0,
+                0.0,
+            ],
         };
         self.queue.write_buffer(&self.post_buffer, 0, bytemuck::bytes_of(&post));
         if let (true, Some(t)) = (self.contact_now, &self.targets.contact) {

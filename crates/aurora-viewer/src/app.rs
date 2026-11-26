@@ -10680,6 +10680,8 @@ impl App {
             exposure_lock: self.viewfinder_on() && self.snapshots.vf.ae_lock,
             tonemap_mix: self.settings.tonemap_mix,
             sharpen: self.settings.sharpen,
+            vibrance: crate::settings::frame_color(self.settings.vibrance, crate::settings::VIBRANCE, self.world.eep.rlva_locked),
+            saturation: crate::settings::frame_color(self.settings.saturation, crate::settings::SATURATION, self.world.eep.rlva_locked),
             glow: self.settings.glow,
             bloom: if self.settings.bloom { self.settings.bloom_strength } else { 0.0 },
             water_height: self.world.main_water_height(),

@@ -607,6 +607,12 @@ pub struct Settings {
     /// times the sky's own (`light_strength`, 0.25 to 10; 1 leaves the sky
     /// as it is). After Black Dragon's RenderGlobalLightStrength slider.
     pub light_strength: f32,
+    /// Savage Viewer's own: the picture's vibrance, -1 to 1 (0 leaves it as
+    /// it is): the dull colours move more than the vivid ones.
+    pub vibrance: f32,
+    /// Savage Viewer's own: the picture's saturation, 0 (gray) to 2 (1
+    /// leaves it as it is).
+    pub saturation: f32,
     /// GPU occlusion culling: objects hidden behind others are not drawn
     /// (Firestorm UseOcclusion, on by default). Renamed from `gpu_occlusion`
     /// (off while it cost more than it saved) so that saved settings take
@@ -1585,6 +1591,30 @@ pub(crate) fn light_strength(setting: f32) -> f32 {
     }
 }
 
+/// The vibrance and the saturation that leave the picture as it is.
+pub(crate) const VIBRANCE: f32 = 0.0;
+pub(crate) const SATURATION: f32 = 1.0;
+/// The ranges of their sliders.
+pub(crate) const VIBRANCE_RANGE: std::ops::RangeInclusive<f32> = -1.0..=1.0;
+pub(crate) const SATURATION_RANGE: std::ops::RangeInclusive<f32> = 0.0..=2.0;
+
+/// A colour setting held in its range, `neutral` for a value that is not a
+/// number.
+pub(crate) fn color_setting(setting: f32, range: &std::ops::RangeInclusive<f32>, neutral: f32) -> f32 {
+    if setting.is_finite() {
+        setting.clamp(*range.start(), *range.end())
+    } else {
+        neutral
+    }
+}
+
+/// The vibrance or saturation a frame is drawn with: the setting, or
+/// `neutral` while RLVa locks the environment (@setenv), as the looks kept
+/// on the world view are held back then.
+pub(crate) fn frame_color(setting: f32, neutral: f32, env_locked: bool) -> f32 {
+    if env_locked || !setting.is_finite() { neutral } else { setting }
+}
+
 /// RenderTonemapMix's default (settings.xml).
 pub(crate) const TONEMAP_MIX: f32 = 0.7;
 
@@ -1986,6 +2016,8 @@ impl Default for Settings {
             bloom: false,
             bloom_strength: BLOOM_STRENGTH,
             light_strength: LIGHT_STRENGTH,
+            vibrance: VIBRANCE,
+            saturation: SATURATION,
             shadow_resolution: 0,
             shadow_distance: 0.0,
             occlusion_culling: true,
@@ -2962,6 +2994,8 @@ impl Settings {
             BLOOM_STRENGTH
         };
         self.light_strength = light_strength(self.light_strength);
+        self.vibrance = color_setting(self.vibrance, &VIBRANCE_RANGE, VIBRANCE);
+        self.saturation = color_setting(self.saturation, &SATURATION_RANGE, SATURATION);
         if self.shadow_resolution > 0 {
             self.shadow_resolution = self.shadow_resolution.clamp(*SHADOW_RESOLUTION.start(), *SHADOW_RESOLUTION.end());
         }

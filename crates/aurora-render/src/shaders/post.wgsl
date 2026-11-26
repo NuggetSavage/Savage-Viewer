@@ -34,6 +34,9 @@ struct PostParams {
     // (left, top, width, height; 0, 0, 1, 1 outside a tiled photo): the
     // glow's 512 x 512 texels are the whole photo's, as in one pass
     photo_part: vec4<f32>,
+    // (Savage Viewer) the picture's colour: x vibrance (-1 to 1, 0 = none),
+    // y saturation (0 to 2, 1 = none); zw unused
+    grade: vec4<f32>,
 };
 @group(0) @binding(2) var<uniform> post: PostParams;
 // Blurred glow (512x512, display space), see glow.wgsl.
@@ -313,6 +316,19 @@ fn fs_bloom_prefilter(in: Out) -> @location(0) vec4<f32> {
     return vec4<f32>(acc.rgb / max(acc.a, 1e-5), 1.0);
 }
 
+// (Savage Viewer) Vibrance and saturation, on the display-encoded color:
+// each moves the color away from (or towards) its own gray. Saturation
+// moves every color alike; vibrance moves a color the less the more
+// saturated it already is, so that vivid colors do not clip while the dull
+// ones come up. No equivalent in the Legacy Viewer's post chain.
+fn color_grade(c: vec3<f32>) -> vec3<f32> {
+    let gray = vec3<f32>(dot(c, vec3<f32>(0.2126, 0.7152, 0.0722)));
+    let spread = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
+    let vibrance = 1.0 + post.grade.x * (1.0 - spread);
+    let d = mix(gray, c, max(vibrance * post.grade.y, 0.0));
+    return clamp(d, vec3<f32>(0.0), vec3<f32>(1.0));
+}
+
 @fragment
 fn fs_post(in: Out) -> @location(0) vec4<f32> {
     var m: vec3<f32>;
@@ -328,6 +344,9 @@ fn fs_post(in: Out) -> @location(0) vec4<f32> {
         // glowcombineF.glsl: added in display space, then clamped by the 8-bit target
         let g = textureSampleLevel(glow_tex, hdr_sampler, post.photo_part.xy + in.uv * post.photo_part.zw, 0.0).rgb;
         m = srgb_to_linear_post(min(linear_to_srgb(m) + g, vec3<f32>(1.0)));
+    }
+    if (post.grade.x != 0.0 || post.grade.y != 1.0) {
+        m = srgb_to_linear_post(color_grade(clamp(linear_to_srgb(m), vec3<f32>(0.0), vec3<f32>(1.0))));
     }
     if (post.debug_glow > 0.5) {
         // red: glow x 10 (0.1 saturates), green: glow x 2, blue: dimmed scene

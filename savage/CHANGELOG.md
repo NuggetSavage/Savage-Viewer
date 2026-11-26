@@ -5,6 +5,22 @@ bar and in About. Each version below names its commit on GitHub (branch
 `savage`), which is the exact code of that version, and the build keeps a
 copy of each viewer in `C:\dev\savage-viewer-app\versions`.
 
+## 0.4.7 (2026-11-25)
+
+Commit: the one titled "Version 0.4.7" on GitHub.
+
+Added
+- Two sliders in Preferences > Graphics, under Exposure and glow:
+  - Vibrance (-1 to 1, 0 changes nothing): makes dull colours stronger and
+    leaves vivid ones mostly alone.
+  - Saturation (0 to 2, 1 changes nothing): makes every colour stronger or
+    weaker; 0 is black and white.
+- Both are on your photos too (any size), are saved in your saved graphics
+  profiles, and are not changed by the Potato to Deluxe levels. They add to
+  whatever a GShade preset does.
+
+Not yet seen working on a PC.
+
 ## 0.4.6 (2026-11-25)
 
 Commit: the one titled "Version 0.4.6" on GitHub.

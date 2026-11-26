@@ -5,6 +5,19 @@ every change of ours is on `savage` and is listed here, newest first, so a
 merge of upstream knows what to keep. Upstream's `TASKS.md` is left alone:
 it is rewritten daily there and any line of ours would conflict.
 
+## 2026-11-25: vibrance and saturation of the picture
+
+- `post.wgsl` `color_grade`, in `fs_post` after the glow: on the
+  display-encoded colour, away from or towards its own gray; vibrance
+  weighs by how little saturated the colour is. `PostParams` / `PostU`
+  gain `grade` (96 bytes both sides; the shader was validated with the
+  project's naga).
+- `FrameParams::vibrance` / `saturation`, from `Settings::vibrance` /
+  `saturation` (held in range by `sanitized`), neutral while RLVa locks
+  the environment (`frame_color`), like the looks kept on the world view.
+- Saved profiles hold both (`saved.rs`); no level writes them.
+- No equivalent in the Legacy Viewer's post chain.
+
 ## 2026-11-25: the viewfinder's Hidden display hides the poser and Personal lighting
 
 - `app.rs`, the full-frame branch of `Screen::World`: with

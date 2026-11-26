@@ -64,6 +64,10 @@ quality_fields! {
     // over the quality's step (0 in a profile from before them: the step's)
     shadow_resolution: u32,
     shadow_distance: f32,
+    // Savage Viewer's own: the picture's colour (neutral in a profile from
+    // before them)
+    vibrance: f32,
+    saturation: f32,
 }
 
 /// The photo filters a profile holds, so that loading it brings the whole

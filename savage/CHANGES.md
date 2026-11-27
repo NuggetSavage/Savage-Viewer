@@ -10,7 +10,7 @@ it is rewritten daily there and any line of ours would conflict.
 - `post.wgsl` `color_grade`, in `fs_post` after the glow: on the
   display-encoded colour, away from or towards its own gray; vibrance
   weighs by how little saturated the colour is. `PostParams` / `PostU`
-  gain `grade` (96 bytes both sides; the shader was validated with the
+  gain `grade` (112 bytes both sides since upstream's `cutout_key`; the shader was validated with the
   project's naga).
 - `FrameParams::vibrance` / `saturation`, from `Settings::vibrance` /
   `saturation` (held in range by `sanitized`), neutral while RLVa locks
@@ -303,7 +303,11 @@ it is rewritten daily there and any line of ours would conflict.
 - **What:** a switch, "Keep on in the world" (photo window > Filters, and
   Preferences > Graphics > Photo). On, the active looks (filters and LUTs)
   stay drawn over the world view once the photo window is closed. Off by
-  default.
+  default. Since the merge of 2026-11-26 (0.5.0) the photo window's switch
+  is drawn in `ui/snapshot.rs` (upstream's looks editor is shared with the
+  Director and its own World filters window, `world_look`), and the World
+  filters give way while this switch draws looks
+  (`App::photo_looks_kept_on_world`).
 - **Why it differs:** upstream draws the looks on the photo window's live
   view only (`App::live_look` returned `None` with the window closed).
 - **Files:** `crates/aurora-viewer/src/snapshot/looks.rs` (`Live`, `live`,

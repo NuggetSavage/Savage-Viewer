@@ -1279,6 +1279,18 @@ impl App {
     /// (`looks::live`), in the world only: the login and loading screens
     /// stay as they are. `divisor`: the frame's reduced resolution (RLVa's,
     /// the paused scene's), which sizes the image the looks are drawn on.
+    /// (Savage Viewer) "Keep on in the world" is drawing the photo's looks
+    /// over the world now: upstream's World filters give way to them, as
+    /// they do to the photo window's.
+    pub(super) fn photo_looks_kept_on_world(&self) -> bool {
+        let world = matches!(self.screen, Screen::World);
+        let always = self.settings.snapshot.looks_always;
+        matches!(
+            looks::live(false, always, world, self.world.eep.rlva_locked),
+            Some(looks::Live::World)
+        ) && !self.settings.snapshot.looks.is_empty()
+    }
+
     pub(super) fn live_look(&mut self, window: (u32, u32), divisor: u32, focus: Option<f32>) -> Option<aurora_render::looks::PhotoLook> {
         if !self.panels.snapshot && !self.panels.director {
             let world = matches!(self.screen, Screen::World);
@@ -1791,7 +1803,10 @@ impl App {
         // the window from the desktop. A freeze frame (above) and "Save
         // as" stay the viewer's own photo, drawn apart: the screen has
         // moved on from the first, and the second waits behind a dialog.
-        if chosen.is_none() && self.settings.snapshot.screen_shader && snapshot::screen::supported() {
+        // A shutter pressed in a window outside the viewer's is the viewer's
+        // own photo too: that window has the focus and may lie over the
+        // view, so the screen there is not the photo.
+        if chosen.is_none() && self.settings.snapshot.screen_shader && snapshot::screen::supported() && !self.outside.focused() {
             if self.snapshots.screen_grab.is_none() {
                 log::info!("photo: of the screen, the interface left out of the next frames");
                 // the outlines of a choice in the scene are not on a photo

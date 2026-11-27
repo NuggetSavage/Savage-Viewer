@@ -13996,7 +13996,7 @@ ao-duplicate-native = { $count ->
     [one] Another #Aurora/{ $folder } folder contains { $count } set. Merge it into the active AO folder?
    *[other] Another #Aurora/{ $folder } folder contains { $count } sets. Merge it into the active AO folder?
     }
-ao-native-already-exists = A native Savage AO folder already exists. Choose it in the AO window instead of migrating again.
+ao-native-already-exists = A native Aurora AO folder already exists. Choose it in the AO window instead of migrating again.
 
 # Guided AO editor
 ao-states = States
@@ -15249,7 +15249,7 @@ blender-live-avatar-help = For rigged meshes: send your shape to Blender or Maya
 livemesh-shape-section = Your shape in Blender or Maya
 blender-live-import-help = Freezes a snapshot of the object for the normal import: review, price, then confirm. Later edits in Blender or Maya do not change it.
 blender-live-from = From
-blender-live-plugins-help = Aurora installs the matching plug-in in each Blender, keeps a backup of the previous one and never installs an older version.
+blender-live-plugins-help = Savage installs the matching plug-in in each Blender, keeps a backup of the previous one and never installs an older version.
 blender-live-ago-seconds = { $count } s
 blender-live-ago-minutes = { $count } min
 blender-live-ago-hours = { $count } h

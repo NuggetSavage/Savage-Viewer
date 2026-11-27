@@ -14,7 +14,7 @@ impl App {
         let mut open = true;
         let before = self.settings.world_look.clone();
         let stars = self.settings.snapshot.look_favorites.len();
-        let photo_shown = self.panels.snapshot || self.panels.director;
+        let photo_shown = self.panels.snapshot || self.panels.director || self.photo_looks_kept_on_world();
         let mut actions = Vec::new();
         ui::world_look::show(
             ctx,
@@ -55,7 +55,7 @@ impl App {
         } else {
             None
         };
-        let photo_shown = self.panels.snapshot || self.panels.director;
+        let photo_shown = self.panels.snapshot || self.panels.director || self.photo_looks_kept_on_world();
         let replace = ui.replace_target(self.settings.world_look.looks.len());
         let stack = looks::world_stack(&self.settings.world_look, pointed, replace, photo_shown);
         if stack.is_empty() {

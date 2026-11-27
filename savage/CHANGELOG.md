@@ -5,6 +5,38 @@ bar and in About. Each version below names its commit on GitHub (branch
 `savage`), which is the exact code of that version, and the build keeps a
 copy of each viewer in `C:\dev\savage-viewer-app\versions`.
 
+## 0.5.0 (2026-11-26)
+
+Commit: the one titled "Version 0.5.0" on GitHub.
+
+Added
+- Everything Aurora Viewer added between 2026-11-09 and 2026-11-26 (759 of
+  its changes, merged in). The main ones:
+  - The Director: place the camera frame by frame (keyframes on a
+    timeline), play the track back, and film it or render it off line, up
+    to 4K. A PNG picture sequence needs nothing extra; MP4 and MOV need
+    ffmpeg, which the Director offers to download.
+  - 360 degree snapshots.
+  - World filters: Aurora's own window to keep filters on the world view.
+  - Ray tracing (Deluxe level, where the card can), planet curvature,
+    saving a parcel's environment, automatic graphics tuning.
+  - More interface languages.
+- All of Savage Viewer's own changes are kept: the update button, Screen
+  shader photos, the Hidden display, Vibrance and Saturation, Light
+  strength, the name.
+
+Changed
+- "Keep on in the world" and Aurora's new World filters window do the same
+  job. While "Keep on in the world" is on with a filter in it, it wins and
+  the World filters wait.
+- A photo taken from a photo window dragged outside the viewer is the
+  viewer's own photo, without the Screen shader.
+- The update button now goes through the proxy set in Preferences.
+- The languages Aurora added show its About line in English.
+
+Not yet seen working on a PC. This is the largest change so far: 2,048
+files. The previous version stays in `versions` if this one misbehaves.
+
 ## 0.4.7 (2026-11-25)
 
 Commit: the one titled "Version 0.4.7" on GitHub.

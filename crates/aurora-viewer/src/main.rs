@@ -387,6 +387,7 @@ fn run_viewer() -> anyhow::Result<()> {
     // the browsers stop with the app; their private profiles are removed
     // while the plugins let go of their files
     let restart_vr = app.requested_vr_restart();
+    let restart_updated = app.requested_update_restart();
     app.leak_session_at_exit();
     drop(app);
     media::private_profile::finish(std::time::Duration::from_secs(8));
@@ -394,6 +395,10 @@ fn run_viewer() -> anyhow::Result<()> {
     result?;
     if let Some(mode) = restart_vr {
         app::restart_with_vr(mode);
+    } else if let Some(exe) = restart_updated {
+        // (Savage Viewer) the updated exe, once everything of this one is
+        // written
+        savage_update::start(&exe);
     }
     Ok(())
 }

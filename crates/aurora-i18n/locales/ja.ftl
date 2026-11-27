@@ -13849,7 +13849,7 @@ ao-unfinished-import = #Aurora/{ $folder }に未完了のＡＯのインポー�
 ao-finish-import = インポートを完了
 ao-show-in-inventory = インベントリで表示
 ao-duplicate-native = 別の#Aurora/{ $folder }フォルダに{ $count }セットあります。現在のＡＯフォルダに統合しますか？
-ao-native-already-exists = Savage ＡＯフォルダはすでにあります。再度移行せず、ＡＯウィンドウで選択してください。
+ao-native-already-exists = Aurora ＡＯフォルダはすでにあります。再度移行せず、ＡＯウィンドウで選択してください。
 
 # Guided AO editor
 ao-states = 状態
@@ -15081,7 +15081,7 @@ blender-live-avatar-help = リグ付きメッシュ用：シェイプをBlender�
 livemesh-shape-section = BlenderまたはMaya内のシェイプ
 blender-live-import-help = 通常のインポート用にオブジェクトのスナップショットを固定します：確認、料金、そして確定。BlenderまたはMayaでの後の編集は反映されません。
 blender-live-from = 元
-blender-live-plugins-help = Auroraは各Blenderに対応するプラグインをインストールし、以前のものをバックアップし、古いバージョンをインストールすることはありません。
+blender-live-plugins-help = Savageは各Blenderに対応するプラグインをインストールし、以前のものをバックアップし、古いバージョンをインストールすることはありません。
 blender-live-ago-seconds = { $count }秒
 blender-live-ago-minutes = { $count }分
 blender-live-ago-hours = { $count }時間

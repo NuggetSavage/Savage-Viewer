@@ -960,6 +960,10 @@ impl SnapshotUi {
             thumb: &thumb,
         };
         self.looks.show(ui, p, super::looks_editor::Stack::photo(s), opts, out);
+        // Savage Viewer's own: the looks stay on the world once this window
+        // is closed (`snapshot::looks::live`)
+        widgets::switch_labeled(ui, p, &mut s.looks_always, aurora_i18n::tr!("photo-looks-always"))
+            .on_hover_text(aurora_i18n::tr!("photo-looks-always-hint"));
         if std::mem::take(&mut self.looks.reveal) {
             ui.scroll_to_rect(filter.with_max_y(ui.cursor().top()), Some(egui::Align::Center));
         }

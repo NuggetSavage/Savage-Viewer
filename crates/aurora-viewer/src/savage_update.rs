@@ -279,15 +279,17 @@ fn available(release: &Release) -> VersionState {
 }
 
 fn client() -> Result<reqwest::Client, String> {
-    reqwest::Client::builder()
-        .user_agent(aurora_version::user_agent())
-        .https_only(true)
-        .connect_timeout(Duration::from_secs(15))
-        // a connection that sends nothing for a minute is given up: no
-        // request waits for ever
-        .read_timeout(Duration::from_secs(60))
-        .build()
-        .map_err(|e| e.to_string())
+    // (through the proxy the user set, as the viewer's other clients)
+    aurora_proxy::http_client(|builder| {
+        builder
+            .user_agent(aurora_version::user_agent())
+            .https_only(true)
+            .connect_timeout(Duration::from_secs(15))
+            // a connection that sends nothing for a minute is given up: no
+            // request waits for ever
+            .read_timeout(Duration::from_secs(60))
+    })
+    .map_err(|e| e.to_string())
 }
 
 /// A response's body, at most `max` bytes of it.

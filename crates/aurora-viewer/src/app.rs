@@ -7673,11 +7673,6 @@ impl App {
         crate::world::region_tracker::save_before_exit();
         crate::autoreplace::save_before_exit();
         crate::tolerant::save_before_exit();
-        // (Savage Viewer) the updated exe, once everything of this one is
-        // written (`savage_update`)
-        if let Some(exe) = self.start_after_update.take() {
-            crate::savage_update::start(&exe);
-        }
         event_loop.exit();
     }
 
@@ -7710,6 +7705,12 @@ impl App {
         if let Some(window) = &self.retired_window {
             window.set_visible(false);
         }
+    }
+
+    /// (Savage Viewer) The updated exe to start once this viewer has written
+    /// everything (`savage_update`, started at the end of `run_viewer`).
+    pub fn requested_update_restart(&mut self) -> Option<std::path::PathBuf> {
+        self.start_after_update.take()
     }
 
     pub fn requested_vr_restart(&self) -> Option<crate::camera::VrView> {
@@ -16936,6 +16937,9 @@ impl App {
     /// template chooser in the browser, in place of the built-in form
     /// (disabled, see main.rs).
     fn open_issue_chooser(&self) {
+        if !crate::links::BUG_REPORTS {
+            return;
+        }
         log::info!("bug report: opening the GitHub issue chooser");
         self.egui_ctx.open_url(egui::OpenUrl::new_tab(crate::links::NEW_ISSUE));
     }
@@ -19296,7 +19300,9 @@ impl App {
                         let screen = ctx.content_rect();
                         ui::layout::set_work_area(&ctx, screen);
                         ui::layout::set_move_area(&ctx, screen);
+                        self.env_ui.over_viewfinder = true;
                         let reset = self.personal_lighting(&ctx, &p, true);
+                        self.env_ui.over_viewfinder = false;
                         self.env_actions(reset);
                     }
                     // the exit's question still shows over the photo mode
@@ -19791,10 +19797,12 @@ impl App {
                 let current_toolbar = self.settings.toolbar.get_or_insert_default();
                 let composed_now = current_toolbar.compose_top();
                 toolbar_migrated |= composed_now;
-                if composed_now && !self.settings.show_bug_report {
+                // (Savage Viewer) no bug report button where the reports are off
+                let show_bug_report = crate::links::BUG_REPORTS && self.settings.show_bug_report;
+                if composed_now && !show_bug_report {
                     current_toolbar.top.retain(|button| button.command != "report_bug");
                 }
-                toolbar_migrated |= current_toolbar.set_bug_visible(layout, self.settings.show_bug_report);
+                toolbar_migrated |= current_toolbar.set_bug_visible(layout, show_bug_report);
                 let mut demo_toolbar = None;
                 // AURORA_DEMO_TOOLBAR=custom|side|labels|right: the mockup's
                 // side bar, for this run only

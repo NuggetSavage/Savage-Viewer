@@ -830,12 +830,13 @@ fn names_upstream_on_purpose(key: &str) -> bool {
         "blender-live-bundled-version",
         "blender-shape-connect",
         "import-preview-aurora",
+        "ao-native-already-exists",
     ]
     .contains(&key)
         // upstream's own things, really named so: the Maya and Blender
         // plug-ins and their shelf, the ffmpeg and the LUTs its project
         // publishes, the self-test's folder
-        || ["rlva-selftest", "blender-live-maya", "livemesh-", "blender-live-plugins", "director-ffmpeg-pack", "photo-lut-pack"]
+        || ["rlva-selftest", "blender-live-maya", "livemesh-",  "director-ffmpeg-pack", "photo-lut-pack"]
             .iter()
             .any(|prefix| key.starts_with(prefix))
 }

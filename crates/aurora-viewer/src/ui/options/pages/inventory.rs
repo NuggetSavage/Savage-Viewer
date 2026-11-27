@@ -10,7 +10,9 @@ pub fn page(cx: &mut Cx) {
     cx.track(&field!(inventory.filter_defaults));
     cx.track(&field!(inventory.tab_filter_defaults));
     cx.group(tr!("ui-options-sorting"), |cx| {
-        cx.choice(
+        // as the window's own menu (`Sort::set_by_date`): the order chosen
+        // here replaces an explorer column's
+        if cx.choice(
             tr!("ui-inventory-controls-display-order"),
             "",
             &field!(inventory.sort.by_date),
@@ -18,7 +20,10 @@ pub fn page(cx: &mut Cx) {
                 (true, tr!("ui-inventory-controls-newest-first"), false),
                 (false, tr!("common-by-name"), false),
             ],
-        );
+        ) {
+            let by_date = cx.s.inventory.sort.by_date;
+            cx.s.inventory.sort.set_by_date(by_date);
+        }
         cx.toggle(
             tr!("ui-inventory-controls-folders-always-by-name"),
             "",
@@ -67,6 +72,11 @@ pub fn page(cx: &mut Cx) {
         cx.toggle(tr!("ui-inventory-controls-worn-tab"), "", &field!(inventory.show_worn));
         cx.toggle(tr!("ui-inventory-controls-favorites-tab"), "", &field!(inventory.show_favorites));
         cx.toggle(
+            tr!("inventory-favorites-show-parent-folders"),
+            tr!("inventory-favorites-show-parent-folders-help"),
+            &field!(inventory.favorites_show_parent_folders),
+        );
+        cx.toggle(
             tr!("ui-inventory-controls-separate-search-in-each-tab"),
             "",
             &field!(inventory.separate_searches),
@@ -87,6 +97,13 @@ pub fn page(cx: &mut Cx) {
     cx.group(tr!("task-transfer-preferences"), |cx| {
         cx.toggle(tr!("task-transfer-warn-move"), "", &field!(inventory.warn_task_move));
         cx.toggle(tr!("task-transfer-warn-scripted"), "", &field!(inventory.warn_scripted_task_move));
+    });
+    cx.group(tr!("ui-options-before-acting"), |cx| {
+        cx.toggle(
+            tr!("ui-options-confirm-inventory-delete"),
+            tr!("ui-options-confirm-inventory-delete-help"),
+            &field!(inventory.confirm_delete),
+        );
     });
     cx.group(tr!("ui-inventory-controls-also-search-in"), |cx| {
         cx.toggle(tr!("ui-inventory-controls-library"), "", &field!(inventory.search_library));
@@ -132,13 +149,5 @@ pub fn page(cx: &mut Cx) {
             cx.s.received_items_since = crate::ui::inventory::view::now();
         }
         cx.track(&field!(received_items_since));
-    });
-    cx.group(tr!("import-window-title"), |cx| {
-        cx.choice(
-            tr!("import-entry-point"),
-            tr!("import-entry-point-help"),
-            &field!(imports.icon_bar),
-            &[(false, tr!("import-entry-window"), false), (true, tr!("import-icon-bar"), false)],
-        );
     });
 }

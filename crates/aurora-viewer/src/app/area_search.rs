@@ -2,7 +2,8 @@
 //! FSAreaSearch::findObjects / processRequestQueue / requestObjectProperties
 //! (indra/newview/fsareasearch.cpp). Avatars are excluded; attachments are opt-in.
 use super::*;
-use crate::ui::area_search::{Action, Row};
+use crate::object_stage::Place;
+use crate::ui::area_search::{Action, Env, Facts, MenuLocks, Row};
 use crate::world::objects::{ObjKey, Object, ObjectStore};
 use aurora_net::build::{BuildCmd, ObjectProps};
 use rayon::prelude::*;
@@ -15,6 +16,52 @@ const IN_FLIGHT: usize = PACKET * 3;
 const TIMEOUT: Duration = Duration::from_secs(30);
 /// Between two touches of the menu's selection (FSAreaSearchTouchTimer).
 const TOUCH_SPACING: Duration = Duration::from_millis(200);
+
+/// What RLVa hides of the right-click menu opened on the rows `ids`:
+/// FSPanelAreaSearchList::onContextMenuItemVisibleRLV (indra/newview/
+/// fsareasearch.cpp). Nothing with RLVa off, everything under @interact or
+/// for a row whose object is gone; otherwise each word is refused as soon
+/// as one row's object refuses it, with the checks the actions themselves
+/// meet when sent: a touch and a sit without a picked point. The teleport
+/// is asked as a local one whatever the distance
+/// (`rlva_can_teleport_local`).
+fn menu_locks(world: &World, ids: &[Uuid], now: Instant) -> MenuLocks {
+    if !world.rlva.enabled() {
+        return MenuLocks::default();
+    }
+    if world.rlva.has("interact") {
+        return MenuLocks::ALL;
+    }
+    // RlvActions::canBuyObject: @buy, whatever the object
+    let mut locks = MenuLocks {
+        buy: world.rlva.has("buy"),
+        ..MenuLocks::default()
+    };
+    for id in ids {
+        let Some((idx, o)) = world.objects.index_of_uuid(id).and_then(|i| Some((i, world.objects.get(i)?))) else {
+            return MenuLocks::ALL;
+        };
+        locks.touch |= !world.rlva_can_touch(o.key.region, o.key.local_id);
+        locks.edit |= !world.rlva_can_edit(idx);
+        locks.delete |= !world.rlva_can_delete_or_return_object(idx);
+        locks.sit |= !world.rlva_allows_command(
+            &NetCommand::RequestSit {
+                handle: o.key.region,
+                target: *id,
+                offset: Vec3::ZERO,
+            },
+            Uuid::nil(),
+        );
+        locks.teleport |= !Scene::object_transform(world, idx, now, 0).is_some_and(|xf| {
+            let (x, y) = crate::ui::minimap::to_global(world, xf.0);
+            world.rlva_can_teleport_local(glam::DVec3::new(x, y, f64::from(xf.0.z)))
+        });
+        if locks == MenuLocks::ALL {
+            break;
+        }
+    }
+    locks
+}
 
 #[derive(Default)]
 pub(super) struct Feed {
@@ -220,10 +267,12 @@ impl App {
         self.panels.minimap = false;
         self.area_search_ui.table.filters = Default::default();
         self.area_search_ui.demo_controls(mode);
-        self.area_search_ui.demo_menu = mode == "menu";
-        self.area_search_ui.table.filters.parcel_only = mode == "parcel";
-        self.area_search_ui.table.filters.sale = mode == "sale";
-        if mode == "search" {
+        let has = |option: &str| mode.split(',').any(|o| o == option);
+        self.area_search_ui.demo_menu = has("menu");
+        self.area_search_ui.demo_select = has("select") || has("card");
+        self.area_search_ui.table.filters.parcel_only = has("parcel");
+        self.area_search_ui.table.filters.sale = has("sale");
+        if has("search") {
             self.area_search_ui.table.filters.query = aurora_i18n::tr!("demo-fountain").into();
         }
         let keys: Vec<_> = self
@@ -266,10 +315,12 @@ impl App {
         // touches already asked for go on once the window is closed
         self.area_search_touches(Instant::now());
         if !self.panels.area_search {
+            self.area_search_ui.closed();
             if self.area_search_feed.seeded {
                 self.area_search_feed.reset();
                 self.area_search_ui.table.replace(Vec::new());
-                self.area_search_ui.selection.clear();
+                self.area_search_ui.selection.reset();
+                self.area_search_ui.stage.stage.clear(&self.scene);
             }
             if self
                 .area_search_feed
@@ -287,7 +338,7 @@ impl App {
         if self.area_search_feed.region != self.world.main_region {
             self.area_search_feed.reset();
             self.area_search_feed.region = self.world.main_region;
-            self.area_search_ui.selection.clear();
+            self.area_search_ui.selection.reset();
         }
         if !self.area_search_feed.seeded {
             self.area_search_feed
@@ -318,13 +369,34 @@ impl App {
             self.area_search_feed.next = Some(now + Duration::from_millis(500));
             self.area_search_snapshot(now);
         }
+        let parcel_part = self
+            .world
+            .parcel
+            .as_ref()
+            .is_none_or(|p| p.bitmap.iter().any(|cells| *cells != 0xff) || p.bitmap.is_empty());
+        let neighbours = self.world.regions.len() > 1;
         let parcel_known = self.world.parcel.as_ref().is_some_and(|p| !p.bitmap.is_empty());
         let draw_distance = self.settings.draw_distance;
-        if let Some(action) = self
-            .area_search_ui
-            .show(ctx, p, &mut self.panels.area_search, parcel_known, draw_distance)
-        {
+        self.area_search_stage(ctx, now);
+        let facts = self.area_search_facts();
+        let world = &self.world;
+        let env = Env {
+            parcel_known,
+            parcel_part,
+            neighbours,
+            draw_distance,
+            locks: &|ids: &[Uuid]| menu_locks(world, ids, now),
+            pics: &self.avatar_pics,
+            facts,
+        };
+        let action = self.area_search_ui.show(ctx, p, &mut self.panels.area_search, &env);
+        if let Some(action) = action {
             self.area_search_action(action, now);
+        }
+        let light = self.area_search_ui.stage.light;
+        if light != self.settings.stage_light {
+            self.settings.stage_light = light;
+            self.settings.save();
         }
         let columns = self.area_search_ui.saved_columns();
         let defaults = std::mem::take(&mut self.area_search_ui.save_defaults);
@@ -335,6 +407,34 @@ impl App {
             }
             self.settings.save();
         }
+    }
+
+    /// Keep the 3D view of the wide window up to date with the selection.
+    fn area_search_stage(&mut self, ctx: &egui::Context, now: Instant) {
+        let w = &self.world;
+        let group = |root: &Uuid| super::inspect::stage_group(w, root);
+        let ui = &mut self.area_search_ui;
+        let roots = ui.staged().to_vec();
+        ui.stage.stage.update(w, &self.scene, &roots, group, Place::World, ctx, now);
+        ui.stage.light = self.settings.stage_light;
+    }
+
+    /// Figures of the one selected object, for its card.
+    fn area_search_facts(&self) -> Option<Facts> {
+        let id = self.area_search_ui.selection.single()?;
+        let idx = self.world.objects.index_of_uuid(&id)?;
+        let mut facts = Facts::default();
+        let mut textures = HashSet::new();
+        for prim in crate::build::family(&self.world, idx) {
+            if self.world.objects.get(prim).is_none_or(Object::is_avatar) {
+                continue;
+            }
+            let stats = self.scene.prim_stats(&self.world, prim);
+            facts.triangles += stats.triangles;
+            textures.extend(stats.textures);
+        }
+        facts.texture_memory = textures.iter().map(|id| self.scene.texture_memory(id).0).sum();
+        Some(facts)
     }
 
     /// FSPanelAreaSearchList::onContextMenuItemClick, through the actions
@@ -371,11 +471,16 @@ impl App {
                     self.area_search_feed.touches.push_back((start + TOUCH_SPACING * n as u32, id));
                 }
             }
-            // sitOnObject: AgentRequestSit with no offset
-            Action::Sit(id) => self.on_ctx_action(CtxAction::Sit {
-                target: id,
-                offset: Vec3::ZERO,
-            }),
+            // sitOnObject: AgentRequestSit with no offset, and no @standtp
+            // origin (it does not call RlvHandler::setSitSource)
+            Action::Sit(id) => {
+                self.world.rlva.sitting.no_sit_source = true;
+                self.on_ctx_action(CtxAction::Sit {
+                    target: id,
+                    offset: Vec3::ZERO,
+                });
+                self.world.rlva.sitting.no_sit_source = false;
+            }
             // gAgent.teleportViaLocation(getPositionGlobal())
             Action::Teleport(id) => {
                 if let Some(pos) = position(self, &id) {
@@ -410,9 +515,21 @@ impl App {
                 }
             }
             Action::Buy(id) => self.on_ctx_action(CtxAction::Buy(id)),
+            Action::Profile(id) => self.profile_ui.open(&mut self.world, id),
+            Action::Group(id) => self.group_profile_ui.open(&mut self.world, id),
             // setFindOwnerText(gAgentUsername), then the search
+            // (under RLVa's `@shownames` the owner column shows the stand-in
+            // of our own name too, which is then what finds our objects)
             Action::FilterMine => {
-                let name = self.world.social.name_of(&self.world.agent_id);
+                let name = self
+                    .world
+                    .social
+                    .name_in(crate::world::names::NameScope::Roster, &self.world.agent_id);
+                let name = if self.world.rlva.has("shownames") {
+                    crate::world::rlva::privacy::anonymous_named(&name).display_name.clone()
+                } else {
+                    name
+                };
                 self.area_search_ui.table.filters.owner = name;
                 self.area_search_ui.reveal_search();
             }
@@ -522,6 +639,9 @@ impl App {
                 }
                 let mut row = Row::default();
                 row.id = o.full_id;
+                if !crate::ui::area_search::model::within_reach(global, agent) {
+                    return None;
+                }
                 row.distance = global.distance(agent) as f32;
                 row.on_parcel = on_parcel;
                 row.child = place.child;
@@ -552,7 +672,7 @@ impl App {
                 Some((row, o.key))
             })
             .collect();
-        let candidates: Vec<_> = rows.iter().map(|(r, key)| (r.id, *key)).collect();
+        let candidates = nearest_first(&rows);
         let packets = self.area_search_feed.requests(&candidates, now);
         self.area_search_ui.table.pending = rows.iter().filter(|(r, _)| !r.loaded).count();
         // Name services are requested once per distinct identity per snapshot,
@@ -564,9 +684,11 @@ impl App {
                 .into_iter()
                 .filter(|id| !id.is_nil() && *id != r.group_id)
             {
+                // the names as a list of people shows them: the columns
+                // hide them by their own rule, below
                 names.entry(id).or_insert_with(|| {
                     self.world.social.want_name(id);
-                    self.world.social.name_of(&id)
+                    self.world.social.name_in(crate::world::names::NameScope::Roster, &id)
                 });
             }
             if !r.group_id.is_nil() {
@@ -578,35 +700,41 @@ impl App {
                 });
             }
         }
+        // RLVa `@shownames`: RLVa_hideNameIfRestricted
+        // (indra/newview/fsareasearch.cpp) replaces what the owner and the
+        // last owner columns show by RlvStrings::getAnonym of that text,
+        // whoever it names (oneself, an `@shownames:<uuid>` exception, a
+        // group); the creator column is left as it is.
+        let names_hidden = self.world.rlva.has("shownames");
+        let hide = move |name: String| {
+            if names_hidden && !name.is_empty() {
+                crate::world::rlva::privacy::anonymous_named(&name).display_name.clone()
+            } else {
+                name
+            }
+        };
         let rows = rows
             .into_par_iter()
             .map(|(mut r, _)| {
-                r.owner = if r.owner_id == r.group_id && !r.group_id.is_nil() {
+                r.owner = hide(if r.owner_id == r.group_id && !r.group_id.is_nil() {
                     group_names.get(&r.group_id).cloned().unwrap_or_default()
                 } else {
                     names.get(&r.owner_id).cloned().unwrap_or_default()
-                };
+                });
                 r.creator = names.get(&r.creator_id).cloned().unwrap_or_default();
-                r.last_owner = names.get(&r.last_owner_id).cloned().unwrap_or_default();
+                r.last_owner = hide(names.get(&r.last_owner_id).cloned().unwrap_or_default());
                 r.group = group_names.get(&r.group_id).cloned().unwrap_or_default();
+                r.names_hidden = names_hidden;
                 r
             })
             .collect();
         self.area_search_ui.table.replace(rows);
-        let cost_batches = if self.area_search_ui.needs_costs() {
-            self.area_search_ui.table.prepare();
-            let visible: HashSet<_> = self
-                .area_search_ui
-                .table
-                .visible
-                .iter()
-                .map(|i| self.area_search_ui.table.rows[*i].id)
-                .collect();
-            let candidates: Vec<_> = candidates.into_iter().filter(|(id, _)| visible.contains(id)).collect();
-            self.area_search_feed.cost_batches(&candidates, now)
-        } else {
-            HashMap::new()
-        };
+        // the land impact is always shown (the badges, the totals)
+        self.area_search_ui.table.prepare();
+        let table = &self.area_search_ui.table;
+        let visible: HashSet<_> = table.visible.iter().map(|i| table.rows[*i].id).collect();
+        let candidates: Vec<_> = candidates.into_iter().filter(|(id, _)| visible.contains(id)).collect();
+        let cost_batches = self.area_search_feed.cost_batches(&candidates, now);
         let kept: HashSet<_> = self
             .build
             .highlighted(&self.world)
@@ -629,6 +757,20 @@ impl App {
             self.send(command);
         }
     }
+}
+
+/// What still waits for its name or its land impact, the nearest first. The
+/// Legacy Viewer asks in the order of its object list (FSAreaSearch::
+/// findObjects); with everything around on its way, what is close is read
+/// before the far end of the region.
+fn nearest_first(rows: &[(Row, ObjKey)]) -> Vec<(Uuid, ObjKey)> {
+    let mut waiting: Vec<_> = rows
+        .iter()
+        .filter(|(r, _)| !r.loaded || r.land_impact.is_none())
+        .map(|(r, key)| (r.distance, r.id, *key))
+        .collect();
+    waiting.par_sort_unstable_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+    waiting.into_iter().map(|(_, id, key)| (id, key)).collect()
 }
 
 fn property_commands(packets: HashMap<aurora_net::RegionHandle, Vec<u32>>, kept: &HashSet<ObjKey>) -> Vec<NetCommand> {
@@ -673,6 +815,35 @@ fn for_build(
 mod tests {
     use super::*;
     use glam::Quat;
+
+    #[test]
+    fn area_search_asks_for_the_nearest_first_and_only_for_what_is_missing() {
+        let row = |id: u128, distance: f32, loaded: bool, land_impact: Option<f32>| {
+            let mut r = Row::default();
+            r.id = Uuid::from_u128(id);
+            r.distance = distance;
+            r.loaded = loaded;
+            r.land_impact = land_impact;
+            (
+                r,
+                ObjKey {
+                    region: 1,
+                    local_id: id as u32,
+                },
+            )
+        };
+        let mut rows: Vec<_> = (1..=600).map(|i| row(i, 700.0 - i as f32, false, None)).collect();
+        rows.push(row(601, 1.0, true, Some(2.0)));
+        rows.push(row(602, 2.0, true, None));
+        let order = nearest_first(&rows);
+        assert_eq!(order[0].0, Uuid::from_u128(602), "its land impact is missing");
+        assert_eq!(order[1].0, Uuid::from_u128(600));
+        assert!(order.iter().all(|(id, _)| *id != Uuid::from_u128(601)), "nothing left to ask");
+        let mut feed = Feed::default();
+        let asked = feed.requests(&order[1..], Instant::now());
+        assert_eq!(asked[&1].len(), PACKET);
+        assert!(asked[&1].iter().all(|id| *id > 600 - PACKET as u32), "the nearest fill the packet");
+    }
 
     #[test]
     fn area_search_cost_requests_are_bounded_and_late_invalid_or_partial_replies_stay_unknown() {
@@ -864,5 +1035,76 @@ mod tests {
         assert!(placement(&store, &Object::from_update(1, update(16, 14, Vec3::ZERO))).is_none());
         let local = Object::from_update(crate::world::objects::PREVIEW_REGION, update(17, 0, Vec3::ZERO));
         assert!(placement(&store, &local).is_none());
+    }
+
+    /// The demo world with RLVa on and a prim 1 m from the agent.
+    fn rlva_world() -> (World, Uuid) {
+        let mut world = World::new(std::sync::Arc::new(crate::scene::avatar::AvatarLibrary::load()));
+        for event in crate::demo::events() {
+            world.apply(event);
+        }
+        let handle = world.main_region.expect("demo region");
+        let id = crate::demo::action_id(35_000);
+        let mut prim = crate::demo::action_avatar(false);
+        prim.local_id = 35_000;
+        prim.full_id = id;
+        prim.pcode = aurora_prim::params::LL_PCODE_VOLUME;
+        prim.parent_id = 0;
+        prim.position = Vec3::new(100.0, 120.0, 30.0);
+        prim.name_values.clear();
+        world.apply(aurora_net::NetEvent::ObjectUpdates {
+            handle,
+            objects: vec![prim],
+        });
+        world.agent.position = Vec3::new(100.0, 121.0, 30.0);
+        world.rlva.configure(true);
+        (world, id)
+    }
+
+    fn restrict(world: &mut World, text: &str) {
+        assert!(world.rlva.receive(&aurora_net::ChatMessage {
+            from_name: "Test object".to_owned(),
+            source_id: Uuid::from_u128(1),
+            owner_id: Uuid::from_u128(2),
+            source_type: aurora_net::ChatSourceType::Object,
+            chat_type: aurora_net::ChatType::OwnerSay,
+            region: None,
+            position: Vec3::ZERO,
+            message: text.to_owned(),
+        }));
+    }
+
+    #[test]
+    fn area_search_menu_locks_follow_the_rlva_rule_of_each_word() {
+        let now = Instant::now();
+        let one = |f: fn(&mut MenuLocks)| {
+            let mut locks = MenuLocks::default();
+            f(&mut locks);
+            locks
+        };
+        for (restriction, expected) in [
+            ("@touchall=n", one(|l| l.touch = true)),
+            ("@touchworld=n", one(|l| l.touch = true)),
+            ("@sit=n", one(|l| l.sit = true)),
+            ("@buy=n", one(|l| l.buy = true)),
+            ("@interact=n", MenuLocks::ALL),
+        ] {
+            let (mut world, id) = rlva_world();
+            assert_eq!(menu_locks(&world, &[id], now), MenuLocks::default(), "nothing refused yet");
+            restrict(&mut world, restriction);
+            assert_eq!(menu_locks(&world, &[id], now), expected, "{restriction}");
+            // the preference off: no entry is hidden
+            world.rlva.configure(false);
+            assert_eq!(menu_locks(&world, &[id], now), MenuLocks::default(), "{restriction}, RLVa off");
+        }
+        // @fartouch: the object's own place is measured (no picked point),
+        // for the touch as for the sit
+        let (mut world, id) = rlva_world();
+        restrict(&mut world, "@fartouch:0.5=n");
+        let far = menu_locks(&world, &[id], now);
+        assert!(far.touch && far.sit && !far.buy, "{far:?}");
+        // a row whose object is gone hides every checked entry
+        let (world, id) = rlva_world();
+        assert_eq!(menu_locks(&world, &[id, Uuid::from_u128(77)], now), MenuLocks::ALL);
     }
 }

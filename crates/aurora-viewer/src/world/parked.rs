@@ -29,9 +29,10 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 /// Farther than this from the agent's region, nothing of a region can be
-/// drawn: the draw distance stops at 512 m, and what a region holds stays
-/// within a few tens of metres of its borders.
-pub const OUT_OF_REACH: f64 = 1024.0;
+/// drawn: the camera may stand as far from the avatar as the draw distance
+/// (`Camera::calc_camera_target`), and it draws that far again,
+/// so the reach is twice the largest draw distance.
+pub const OUT_OF_REACH: f64 = 2.0 * crate::settings::DRAW_DISTANCE_MAX as f64;
 
 /// Metres between two regions, from their handles and sizes (0 when they
 /// touch or overlap).
@@ -212,6 +213,36 @@ impl World {
 mod tests {
     use super::*;
 
+    /// At exit the objects of the live store and of a parked region are let
+    /// go, not freed on the main thread: what they hold stays referenced
+    /// (freed, the counts would fall back to the test's own copies).
+    #[test]
+    fn the_live_and_the_parked_objects_are_let_go_at_exit() {
+        // the live store
+        let (mut world, _) = crate::world::derender::tests_support::demo_world();
+        let live = world
+            .objects
+            .iter()
+            .find_map(|(_, o)| o.te.clone())
+            .expect("a live object with faces");
+        let held = Arc::strong_count(&live);
+        world.leak_at_exit();
+        drop(world);
+        assert_eq!(Arc::strong_count(&live), held, "the live store's objects");
+        // a region parked after a far teleport
+        let (mut world, handle) = crate::world::derender::tests_support::demo_world();
+        world.park_region(handle, 1e6);
+        let parked = world.parked[&handle]
+            .objects
+            .iter()
+            .find_map(|o| o.te.clone())
+            .expect("a parked object with faces");
+        let held = Arc::strong_count(&parked);
+        world.leak_at_exit();
+        drop(world);
+        assert_eq!(Arc::strong_count(&parked), held, "the parked region's objects");
+    }
+
     const SIZE: (u32, u32) = (256, 256);
 
     #[test]
@@ -242,10 +273,14 @@ mod tests {
         assert_eq!(region_gap(main, at(1002, 1000)), 256.0);
         assert_eq!(region_gap(at(1002, 1000), main), 256.0);
         assert_eq!(region_gap(main, at(997, 996)), 512.0f64.hypot(768.0));
-        // what a draw distance of 512 m can show is in reach, a teleport
-        // across the map is not
+        // what a camera 1024 m from the avatar can show at a draw distance
+        // of 1024 m is in reach (four regions away diagonally, about
+        // 1086 m), a teleport across the map is not
+        assert_eq!(OUT_OF_REACH, 2048.0);
         assert!(region_gap(main, at(1003, 1003)) < OUT_OF_REACH);
-        assert!(region_gap(main, at(1006, 1000)) > OUT_OF_REACH);
+        assert!(region_gap(main, at(1005, 1004)) > 1024.0);
+        assert!(region_gap(main, at(1005, 1004)) < OUT_OF_REACH);
+        assert!(region_gap(main, at(1010, 1000)) > OUT_OF_REACH);
         assert!(region_gap(main, at(677, 1082)) > OUT_OF_REACH);
         // a large region reaches its far neighbours
         let wide = (aurora_net::origin_to_handle(1000 * 256, 1000 * 256), (1024, 1024));

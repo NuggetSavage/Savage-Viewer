@@ -1,5 +1,55 @@
 use super::*;
 
+#[test]
+fn file_picker_closes_with_its_import_floater_and_reopening_keeps_existing_drafts() {
+    for owner in [Choice::Bulk, Choice::Texture, Choice::Local] {
+        let mut f = Fixture::new();
+        if owner != Choice::Bulk {
+            f.imports.open = false;
+            f.imports.open_type_window(&f.ctx, owner);
+        }
+        f.settle();
+        let cancellation = crate::imports::file_picker::Cancellation::default();
+        f.imports.pending_files = Some(Uuid::new_v4());
+        f.imports.pending_file_choice = Some(owner);
+        f.imports.pending_picker = Some(crate::imports::file_picker::Pending {
+            owner: Some(owner),
+            cancellation: cancellation.clone(),
+        });
+        widgets::close_floater(&f.ctx, owner.window_id());
+        f.frame(Vec::new());
+        assert!(!f.imports.window_open(owner));
+        assert!(cancellation.cancelled());
+        assert!(f.imports.pending_files.is_none());
+        assert_eq!(f.imports.entries.len(), 2);
+        f.imports.open_type_window(&f.ctx, owner);
+        let output = f.settle();
+        assert!(f.imports.window_open(owner));
+        assert!(!output.shapes.iter().any(|shape| matches!(&shape.shape,
+            egui::Shape::Text(text) if text.galley.text() == aurora_i18n::tr!("import-loading"))));
+        let pos = text_position(&output, aurora_i18n::tr!("import-choose-files")) + egui::vec2(5.0, 5.0);
+        let mut actions = Vec::new();
+        for pressed in [true, false] {
+            actions.extend(
+                f.frame(vec![
+                    egui::Event::PointerMoved(pos),
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ])
+                .1,
+            );
+        }
+        assert!(
+            actions.iter().any(|action| matches!(action, Action::Files | Action::Choose(_))),
+            "Add files must be enabled after reopening"
+        );
+    }
+}
+
 struct Fixture {
     ctx: egui::Context,
     theme: crate::theme::Theme,
@@ -97,6 +147,108 @@ fn text_position(output: &egui::FullOutput, label: &str) -> egui::Pos2 {
 }
 
 #[test]
+fn import_queue_drag_reveals_names_and_remembers_each_window_without_changing_selection() {
+    for window in [Choice::Bulk, Choice::Material] {
+        let mut f = Fixture::new();
+        f.imports.entries = ["Laundry SPP (CABINETS 1001)", "Laundry SPP (CABINETS 1002)"]
+            .into_iter()
+            .map(|name| {
+                let mut entry = Entry::new(
+                    "laundry.glb".into(),
+                    Ok(Source::Material {
+                        value: PbrMaterial::default(),
+                        images: Box::new([None, None, None, None]),
+                    }),
+                    Default::default(),
+                );
+                entry.name = name.into();
+                entry
+            })
+            .collect();
+        if window != Choice::Bulk {
+            f.imports.open = false;
+            f.imports.open_type_window(&f.ctx, window);
+        }
+        f.settle();
+        let window_id = egui::Id::unique(window.window_id());
+        let key = window_id.with("queue_width");
+        let row_key = egui::Id::unique(("import_queue_row", f.imports.entries[0].id));
+        let row = |f: &Fixture| f.ctx.data(|data| data.get_temp::<egui::Rect>(row_key)).expect("queue row");
+        let handle = |f: &Fixture| {
+            f.ctx
+                .data(|data| data.get_temp::<egui::Rect>(key.with("handle")))
+                .expect("queue resize handle")
+        };
+        let initial_row = row(&f);
+        let initial_window = f.ctx.memory(|memory| memory.area_rect(window_id)).unwrap();
+        let active = f.imports.active_ids().collect::<Vec<_>>();
+        let from = handle(&f).center();
+        let to = from + Vec2::new(140.0, 0.0);
+        let button = |pos, pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        f.frame(vec![egui::Event::PointerMoved(from)]);
+        f.frame(vec![button(from, true)]);
+        f.frame(vec![egui::Event::PointerMoved(to)]);
+        let (_, actions) = f.frame(vec![button(to, false)]);
+        f.settle();
+        assert!((row(&f).width() - initial_row.width() - 140.0).abs() < 1.0);
+        let full_name = f.ctx.fonts_mut(|fonts| {
+            fonts
+                .layout_no_wrap(
+                    f.imports.entries[0].name.clone(),
+                    egui::FontId::proportional(14.0),
+                    f.theme.palette().ink,
+                )
+                .size()
+                .x
+        });
+        assert!(row(&f).width() > full_name + 16.0, "the full material name fits");
+        assert_eq!(f.imports.active_ids().collect::<Vec<_>>(), active);
+        assert!(f.imports.entries.iter().all(|entry| entry.selected));
+        assert!(
+            !actions
+                .iter()
+                .any(|action| matches!(action, Action::Start | Action::StartFor(_) | Action::Remove(_)))
+        );
+        let after_window = f.ctx.memory(|memory| memory.area_rect(window_id)).unwrap();
+        assert!(
+            (after_window.size() - initial_window.size()).length() < 1.0,
+            "only the columns resize"
+        );
+        let saved_width = f.ctx.data_mut(|data| data.get_persisted::<f32>(key)).expect("saved width");
+        let other = egui::Id::unique(Choice::Texture.window_id()).with("queue_width");
+        assert!(f.ctx.data_mut(|data| data.get_persisted::<f32>(other)).is_none());
+        let saved = ron::to_string(&f.ctx.memory(|memory| memory.clone())).expect("saved layout");
+        // layout::restore preserves the current theme/options around the memory.
+        let options = f.ctx.options(|options| options.clone());
+        f.ctx.memory_mut(|memory| *memory = ron::from_str(&saved).expect("restored layout"));
+        f.ctx.options_mut(|current| *current = options);
+        f.settle();
+        assert_eq!(f.ctx.data_mut(|data| data.get_persisted::<f32>(key)), Some(saved_width));
+        assert!(
+            (row(&f).width() - initial_row.width() - 140.0).abs() < 1.0,
+            "{window:?}: restored row {:?}, initial {initial_row:?}, saved {saved_width}",
+            row(&f)
+        );
+        let reset = handle(&f).center();
+        for _ in 0..2 {
+            f.frame(vec![egui::Event::PointerMoved(reset), button(reset, true)]);
+            f.frame(vec![button(reset, false)]);
+        }
+        f.settle();
+        assert!(
+            f.ctx.data_mut(|data| data.get_persisted::<f32>(key)).is_none(),
+            "double-click resets the width"
+        );
+        assert!((row(&f).width() - initial_row.width()).abs() < 1.0);
+    }
+}
+
+#[test]
 fn unified_import_selects_the_first_entry_and_pins_destinations_above_the_existing_mesh_inspector() {
     let mut f = Fixture::new();
     let first = f.imports.entries[0].id;
@@ -129,7 +281,7 @@ fn unified_import_queue_clicks_switch_panels_without_changing_mesh_options_or_wi
     let output = f.settle();
     assert_eq!(f.imports.active, Some(texture));
     assert_eq!(f.imports.tab, Tab::Batch);
-    text_position(&output, aurora_i18n::tr!("import-max-size"));
+    text_position(&output, aurora_i18n::tr!("import-image-size-limit"));
     assert!(
         !output
             .shapes
@@ -199,127 +351,40 @@ fn unified_import_shortcut_opens_one_window_without_opening_a_native_picker() {
     assert!(!f.imports.open);
 }
 
-fn click_launcher(f: &mut Fixture, choice: Choice) -> Vec<Action> {
+/// A type's window, as the import menu opens it (the quick import bar's
+/// buttons are the toolbar's now: `ui::toolbar::floating`).
+fn open_type(f: &mut Fixture, choice: Choice) {
     f.settle();
-    let pos = f.ctx.data(|data| {
-        data.get_temp::<egui::Rect>(egui::Id::unique(("import_launcher_choice", choice as usize)))
-            .expect("launcher icon")
-            .center()
-    });
-    let mut actions = Vec::new();
-    for pressed in [true, false] {
-        actions.extend(
-            f.frame(vec![
-                egui::Event::PointerMoved(pos),
-                egui::Event::PointerButton {
-                    pos,
-                    button: egui::PointerButton::Primary,
-                    pressed,
-                    modifiers: egui::Modifiers::NONE,
-                },
-            ])
-            .1,
-        );
-    }
-    actions
+    f.imports.open_type_window(&f.ctx, choice);
+    f.settle();
 }
 
+/// Import (Build › Import, its shortcut, the toolbar's "Import") opens the
+/// import window and leaves the import floating block as it is: the quick
+/// import bar it could open is that block now (human request, 2026-11-25).
 #[test]
-fn import_icon_bar_preference_round_trips_and_toggles_independently_of_the_queue() {
+fn import_opens_the_window_and_leaves_the_import_block_alone() {
     let mut f = Fixture::new();
-    let defaults: Preferences = serde_json::from_str("{}").unwrap();
-    assert!(!defaults.icon_bar);
-    f.prefs.icon_bar = true;
-    let saved = serde_json::to_string(&f.prefs).unwrap();
-    f.prefs = serde_json::from_str(&saved).unwrap();
-    assert!(f.prefs.icon_bar);
     let ids: Vec<_> = f.imports.entries.iter().map(|e| e.id).collect();
     f.imports.open = false;
-    f.imports.toggle_import(&f.ctx, &f.prefs);
+    f.imports.toggle_import(&f.ctx);
     let (_, actions) = f.frame(Vec::new());
-    assert!(f.imports.launcher_open);
-    assert!(!f.imports.open);
-    assert!(actions.is_empty());
-    assert!(matches!(click_launcher(&mut f, Choice::Bulk).as_slice(), [Action::Folder]));
     assert!(f.imports.open);
-    f.imports.toggle_import(&f.ctx, &f.prefs);
     assert!(!f.imports.launcher_open);
-    assert!(f.imports.open);
+    assert!(actions.is_empty());
+    f.imports.toggle_bar(&f.ctx);
+    f.imports.toggle_import(&f.ctx);
+    assert!(f.imports.launcher_open && !f.imports.open);
     assert_eq!(f.imports.entries.iter().map(|e| e.id).collect::<Vec<_>>(), ids);
 }
 
 #[test]
-fn unified_import_switch_updates_the_saved_entry_point_and_bar_without_changing_the_queue() {
-    let mut f = Fixture::new();
-    let output = f.settle();
-    let pos = text_position(&output, aurora_i18n::tr!("import-icon-bar")) + egui::vec2(5.0, 5.0);
-    for pressed in [true, false] {
-        let (_, actions) = f.frame(vec![
-            egui::Event::PointerMoved(pos),
-            egui::Event::PointerButton {
-                pos,
-                button: egui::PointerButton::Primary,
-                pressed,
-                modifiers: egui::Modifiers::NONE,
-            },
-        ]);
-        assert!(actions.is_empty());
-    }
-    assert!(f.imports.launcher_open && f.imports.open);
-    assert!(f.prefs.icon_bar);
-    assert_eq!(f.imports.entries.len(), 2);
-    f.settle();
-    let mut first = None::<egui::Rect>;
-    for choice in [
-        Choice::Texture,
-        Choice::Sound,
-        Choice::Animation,
-        Choice::Material,
-        Choice::Mesh,
-        Choice::Bulk,
-        Choice::Local,
-    ] {
-        let rect = f.ctx.data(|data| {
-            data.get_temp::<egui::Rect>(egui::Id::unique(("import_launcher_choice", choice as usize)))
-                .unwrap()
-        });
-        if let Some(first) = first {
-            assert_eq!(rect.center().y, first.center().y, "all types share one row");
-            assert!(rect.left() > first.right());
-        } else {
-            first = Some(rect);
-        }
-    }
-    let output = f.settle();
-    let pos = text_position(&output, aurora_i18n::tr!("import-icon-bar")) + egui::vec2(5.0, 5.0);
-    for pressed in [true, false] {
-        let (_, actions) = f.frame(vec![
-            egui::Event::PointerMoved(pos),
-            egui::Event::PointerButton {
-                pos,
-                button: egui::PointerButton::Primary,
-                pressed,
-                modifiers: egui::Modifiers::NONE,
-            },
-        ]);
-        assert!(actions.is_empty());
-    }
-    assert!(!f.prefs.icon_bar);
-    assert!(!f.imports.launcher_open);
-    assert!(f.imports.open);
-    assert_eq!(f.imports.entries.len(), 2);
-    f.imports.open = false;
-    f.imports.toggle_import(&f.ctx, &f.prefs);
-    assert!(f.imports.open && !f.imports.launcher_open, "off restores the window entry point");
-}
-
-#[test]
-fn import_icon_bar_reuses_typed_drafts_and_only_empty_types_request_a_filtered_picker() {
+fn type_windows_reuse_their_typed_drafts() {
     let mut f = Fixture::new();
     f.imports.open = false;
     f.imports.launcher_open = true;
     let mesh = f.imports.entries[0].id;
-    assert!(click_launcher(&mut f, Choice::Mesh).is_empty());
+    open_type(&mut f, Choice::Mesh);
     assert!(!f.imports.open);
     assert!(f.imports.window_open(Choice::Mesh));
     f.imports.with_window(Choice::Mesh, |imports| {
@@ -328,13 +393,12 @@ fn import_icon_bar_reuses_typed_drafts_and_only_empty_types_request_a_filtered_p
     });
     assert!(f.imports.entries.iter().all(|e| e.selected));
     for choice in [Choice::Sound, Choice::Animation, Choice::Material, Choice::Local] {
-        let actions = click_launcher(&mut f, choice);
-        assert!(matches!(actions.as_slice(), [Action::Choose(picked)] if *picked == choice));
+        open_type(&mut f, choice);
         assert!(!f.imports.open);
         assert!(f.imports.window_open(choice));
         assert!(f.imports.launcher_open);
     }
-    assert!(click_launcher(&mut f, Choice::Texture).is_empty());
+    open_type(&mut f, Choice::Texture);
     let texture = f.imports.entries[1].id;
     f.imports.with_window(Choice::Texture, |imports| {
         assert_eq!(imports.active, Some(texture));
@@ -351,21 +415,20 @@ fn import_icon_bar_reuses_typed_drafts_and_only_empty_types_request_a_filtered_p
         .memory(|memory| memory.area_rect(egui::Id::unique(Choice::Texture.window_id())))
         .unwrap();
     assert_ne!(mesh_rect, texture_rect);
-    assert!(matches!(click_launcher(&mut f, Choice::Bulk).as_slice(), [Action::Folder]));
+    assert!(f.imports.open_folder_import(&f.ctx));
     assert!(f.imports.open);
     assert_eq!(f.imports.visible_indices(), vec![0, 1]);
     assert_eq!(f.imports.entries.len(), 2);
 }
 
 #[test]
-fn import_icon_bar_blocks_another_picker_while_loading_and_escape_keeps_drafts() {
+fn import_icon_bar_escape_keeps_drafts_while_loading() {
     let mut f = Fixture::new();
     f.imports.open = false;
     f.imports.launcher_open = true;
     f.imports.pending_files = Some(Uuid::new_v4());
-    assert!(click_launcher(&mut f, Choice::Sound).is_empty());
+    f.settle();
     assert!(!f.imports.open);
-    f.imports.windows[Choice::Sound.window_index().unwrap()].open = false;
     f.frame(vec![egui::Event::Key {
         key: egui::Key::Escape,
         physical_key: None,
@@ -412,8 +475,7 @@ fn type_window_confirmation_keeps_its_price_and_action_when_another_type_is_open
     f.imports.demo_started = true;
     f.imports.open = false;
     f.imports.launcher_open = true;
-    assert!(click_launcher(&mut f, Choice::Texture).is_empty());
-    f.settle();
+    open_type(&mut f, Choice::Texture);
     let (rect, clip, enabled) = f.ctx.data(|data| {
         data.get_temp::<(egui::Rect, egui::Rect, bool)>(egui::Id::unique("import_upload_action"))
             .expect("type upload action")
@@ -733,4 +795,26 @@ fn shared_routing_header_retains_layout_and_edited_paths_in_both_views() {
     f.prefs.use_default_folders = false;
     f.settle();
     assert_eq!(f.imports.entries[0].upload_path.as_ref(), Some(&edited));
+}
+
+/// The import block's button, "Advanced import" and "Import settings"
+/// (human requests, 2026-11-25): the block, the window in the bar's Folder
+/// mode, and the bar's Settings.
+#[test]
+fn the_toolbar_import_buttons_do_what_the_bar_does() {
+    let mut f = Fixture::new();
+    f.imports.open = false;
+    f.imports.toggle_bar(&f.ctx);
+    assert!(f.imports.launcher_open && !f.imports.open);
+    f.imports.toggle_bar(&f.ctx);
+    assert!(!f.imports.launcher_open);
+    assert!(f.imports.open_folder_import(&f.ctx));
+    assert!(f.imports.open);
+    assert_eq!(f.imports.tab, Tab::Batch);
+    f.imports.open_import_settings(&f.ctx);
+    assert_eq!(f.imports.tab, Tab::Permissions);
+    // waiting for a confirmation: the window, no folder chooser
+    f.imports.confirm = true;
+    assert!(!f.imports.open_folder_import(&f.ctx));
+    assert_eq!(f.imports.tab, Tab::Permissions, "left where it was");
 }

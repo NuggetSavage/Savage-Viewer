@@ -71,21 +71,28 @@ fn texture_allowed(world: &World, draft: &Draft, texture: Uuid) -> bool {
     if let Some((_, material)) = world.local_assets.get(&texture) {
         return !material;
     }
+    // Predefined built-in textures (LLFloaterTexturePicker::onBtnBlank, onBtnTransparent,
+    // get_is_predefined_texture, indra/newview/lltexturectrl.cpp) are available to any wearable
+    // without requiring an inventory item.
+    if texture == aurora_prim::te::BLANK_TEXTURE || texture == aurora_prim::te::TRANSPARENT_TEXTURE {
+        return true;
+    }
+    // init_texture_ctrl (indra/newview/llpaneleditwearable.cpp) sets both
+    // filter masks of the wearable swatches to PERM_NONE, so
+    // LLTextureCtrl::allowDrop takes any texture the agent has, whatever
+    // its Copy, Modify or Transfer rights: worn layers routinely use no-copy
+    // or no-transfer textures. The texture must still be an inventory
+    // texture or snapshot (never a typed id), and its asset id is only
+    // stored in the wearable, never shown.
     let kind = draft.edited.kind;
-    let required = crate::world::inventory::actions::COPY
-        | if draft.item.base_mask & crate::world::inventory::actions::TRANSFER != 0 {
-            crate::world::inventory::actions::TRANSFER
-        } else {
-            0
-        };
     texture == crate::world::inventory::wearable::default_texture(kind)
         || texture.is_nil() && matches!(kind, 1 | 13 | 14 | 16)
         || texture == crate::scene::avatar::IMG_INVISIBLE && kind == 13
-        || world.inventory.items.values().any(|item| {
-            matches!(item.asset_type, 0 | 15)
-                && item.asset_id == texture
-                && crate::world::inventory::actions::held(&world.inventory, item) & required == required
-        })
+        || world
+            .inventory
+            .items
+            .values()
+            .any(|item| matches!(item.asset_type, 0 | 15) && item.asset_id == texture)
 }
 
 /// The texture an inventory entry dragged onto a texture swatch carries: a
@@ -169,6 +176,7 @@ pub fn affected_bakes(kind: u8) -> &'static [usize] {
 #[derive(Default)]
 pub struct State {
     pub open: bool,
+    pub suspended_for_shape: bool,
     pub draft: Option<Draft>,
     pub loading: Option<(Uuid, Uuid)>,
     pub message: String,
@@ -184,6 +192,10 @@ pub struct State {
     pub alpha_previous: HashMap<u32, Uuid>,
     local_textures: HashSet<Uuid>,
     pub preview: preview::Preview,
+    /// Import of an appearance XML into the draft.
+    pub xml: crate::shape_editor::xml_import::Import,
+    /// Export of the draft to an appearance XML.
+    pub xml_export: crate::shape_editor::xml_export::Export,
 }
 
 struct TextureSnapshot {
@@ -278,7 +290,9 @@ impl State {
 
     pub fn changed(&mut self, world: &mut World) {
         self.preview.invalidate();
-        if let Some(draft) = &self.draft {
+        if self.open
+            && let Some(draft) = &self.draft
+        {
             // Only this wearable's editable controls may affect the avatar.
             // Preserve every other parameter and unknown asset field on disk.
             let values: BTreeMap<_, _> = catalog::PARAMS
@@ -305,7 +319,15 @@ impl State {
 
     pub fn close(&mut self, world: &mut World) {
         self.preview.cancel(world);
+        self.close_controls(world);
+    }
+
+    pub fn close_controls(&mut self, world: &mut World) {
+        if self.open {
+            world.preview_shape(None);
+        }
         self.open = false;
+        self.suspended_for_shape = false;
         self.loading = None;
         self.draft = None;
         self.close_confirmation = false;
@@ -317,7 +339,34 @@ impl State {
         self.wanted_images.clear();
         self.alpha_previous.clear();
         self.local_textures.clear();
-        world.preview_shape(None);
+    }
+
+    /// Keep the layer draft and its bake while Shape owns the sliders.
+    /// Returning to the layer lets the user save or discard the edit.
+    pub fn suspend_for_shape(&mut self, world: &World) -> bool {
+        if !self.open
+            || self.close_confirmation
+            || self.copy_name.is_some()
+            || !self
+                .draft
+                .as_ref()
+                .is_some_and(|d| d.pending.is_none() && d.dirty() && has_local_textures(world, d))
+        {
+            return false;
+        }
+        self.dismiss_picker();
+        self.open = false;
+        self.suspended_for_shape = true;
+        true
+    }
+
+    pub fn resume_layer(&mut self, world: &mut World) {
+        if self.suspended_for_shape {
+            self.suspended_for_shape = false;
+            self.open = true;
+            self.camera_pending = true;
+            self.changed(world);
+        }
     }
 
     pub fn update(&mut self, world: &mut World) {
@@ -368,7 +417,7 @@ impl State {
         if changed {
             self.changed(world);
         }
-        if self.open
+        if (self.open || self.suspended_for_shape)
             && self.draft.as_ref().is_some_and(|draft| {
                 draft.pending.is_none()
                     && (!worn(world, draft.item.id)
@@ -379,9 +428,10 @@ impl State {
                             .is_none_or(|item| item.asset_id != draft.item.asset_id))
             })
         {
+            let show_message = self.open;
             self.close(world);
             self.message = aurora_i18n::tr!("wearable-changed").into();
-            self.open = true;
+            self.open = show_message;
         }
     }
 
@@ -397,7 +447,7 @@ impl State {
             return false;
         }
         if !accepts_texture(world, draft, slot, texture) {
-            self.message = aurora_i18n::tr!("wearable-texture-permissions").into();
+            self.message = aurora_i18n::tr!("wearable-texture-inventory").into();
             return false;
         }
         draft.edited.textures.insert(slot, texture);
@@ -504,7 +554,7 @@ impl State {
             .iter()
             .any(|(slot, texture)| draft.original.textures.get(slot) != Some(texture) && !texture_allowed(world, draft, *texture))
         {
-            self.message = aurora_i18n::tr!("wearable-texture-permissions").into();
+            self.message = aurora_i18n::tr!("wearable-texture-inventory").into();
             return None;
         }
         let data = match draft.edited.encode(name.as_deref().unwrap_or(&current.name)) {

@@ -20,6 +20,42 @@ const MEETING: Uuid = Uuid::from_u128(0xC0);
 const ALL: [ChatStyle; 4] = [ChatStyle::Aurora, ChatStyle::Compact, ChatStyle::Bubbles, ChatStyle::Legacy];
 
 #[test]
+fn chat_header_username_follows_preferences_and_saved_names_stay_frozen() {
+    let mut h = H::new(ChatStyle::Aurora);
+    let names = &mut h.world.social.avatar_names;
+    names.options.legacy_format = false;
+    names.options.use_display_names = true;
+    names.options.show_usernames = true;
+    names.on_display_names(
+        &[aurora_net::AvatarNameData {
+            id: JANE,
+            username: "janedoe".into(),
+            display_name: "Jane".into(),
+            ..Default::default()
+        }],
+        &[],
+        None,
+    );
+    let mut message = line("Jane", JANE, ChatKind::Im, "/me waves");
+    assert_eq!(super::chat_header_name(&h.world, &message, "Jane"), "Jane (janedoe)");
+    assert_eq!(
+        super::line_body(&message, &super::sender_name(&h.world, "", &message)).0,
+        "Jane waves"
+    );
+    message.origin = Origin::Log;
+    assert_eq!(super::chat_header_name(&h.world, &message, "Jane"), "Jane");
+    // a private conversation's history line: its name resolves, its header
+    // keeps the short form
+    message.private_history = true;
+    assert!(super::cached_line_sender(&h.world, &message).is_some());
+    assert_eq!(super::chat_header_name(&h.world, &message, "Jane"), "Jane");
+    message.private_history = false;
+    message.origin = Origin::Live;
+    h.world.social.avatar_names.options.show_usernames = false;
+    assert_eq!(super::chat_header_name(&h.world, &message, "Jane"), "Jane");
+}
+
+#[test]
 fn teleport_invitation_paints_one_destination_in_every_style() {
     use crate::world::teleport_invites::{Answer, Invite, InviteKind, Place, Rating};
     for style in ALL {
@@ -41,6 +77,7 @@ fn teleport_invitation_paints_one_destination_in_every_style() {
             rating: Rating::Allowed,
             answer: Answer::Pending,
             notification: 0,
+            presented: None,
         });
         h.world.conversation_line(JANE, line("Jane", JANE, ChatKind::Invite(1), message));
         h.open(Some(JANE));
@@ -63,6 +100,10 @@ fn line(from: &str, source: Uuid, kind: ChatKind, text: &str) -> ChatLine {
         kind,
         source,
         origin: Origin::Live,
+        blocked: false,
+        beyond_range: false,
+        speaker: Default::default(),
+        private_history: false,
     }
 }
 
@@ -285,10 +326,26 @@ impl H {
 
     fn bar_frame(&mut self, events: Vec<egui::Event>) -> Option<super::OutgoingChat> {
         let mut sent = None;
-        self.frames.run(events, |ui| {
+        let texts = self.frames.run(events, |ui| {
             sent = super::bar(ui, &crate::theme::Theme::default().palette(), &mut self.st, &self.gestures, 400.0);
         });
+        self.texts = texts;
         sent
+    }
+
+    fn bar_at(&mut self, pos: egui::Pos2) {
+        let button = |pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Default::default(),
+        };
+        self.bar_frame(vec![egui::Event::PointerMoved(pos)]);
+        self.bar_frame(vec![button(true)]);
+        self.bar_frame(vec![button(false)]);
+        for _ in 0..3 {
+            self.bar_frame(Vec::new());
+        }
     }
 
     fn take(&mut self) -> Vec<ConvAction> {
@@ -358,6 +415,9 @@ fn history_events(key: egui::Key, modifiers: egui::Modifiers) -> Vec<egui::Event
 fn input_history_is_separate_for_local_private_group_and_conference_in_every_style() {
     for style in ALL {
         let mut h = H::new(style);
+        // the settings' default: the nearby field keeps the keyboard after
+        // Enter, as the chat bar does
+        h.st.keep_focus = true;
         let conversations = [None, Some(JANE), Some(BOB), Some(GROUP), Some(MEETING)];
         for (n, conversation) in conversations.into_iter().enumerate() {
             h.open(conversation);
@@ -407,11 +467,11 @@ fn input_history_is_shared_both_ways_between_local_fields_in_every_style() {
         }
         h.bar_frame(vec![egui::Event::Text("/42 café 🙂".into())]);
         let sent = h
-            .bar_frame(history_events(egui::Key::Enter, egui::Modifiers::CTRL))
+            .bar_frame(history_events(egui::Key::Enter, egui::Modifiers::NONE))
             .expect("bar sends");
         assert_eq!(sent.channel, 42);
         assert_eq!(sent.message, "café 🙂");
-        assert_eq!(sent.chat_type, aurora_net::ChatType::Shout);
+        assert_eq!(sent.chat_type, aurora_net::ChatType::Normal);
         h.open(None);
         h.history_key(egui::Key::ArrowUp, egui::Modifiers::CTRL);
         assert_eq!(h.st.draft_mut(None), "/42 café 🙂", "{style:?}");
@@ -552,6 +612,18 @@ fn the_head_acts() {
             has(&h.take(), |a| matches!(a, ConvAction::Close(id) if *id == BOB)),
             "{style:?}: close"
         );
+        // its neighbour in the list shows next (#4373)
+        let order = if style.workspace() {
+            super::sidebar::tab_order(&h.world, &h.st)
+        } else {
+            super::keys::legacy_order(&h.world, &h.st)
+        };
+        let next = super::keys::after_close(&order, BOB);
+        assert!(next.is_some() && next != Some(BOB), "{style:?}: a conversation beside Bob");
+        assert_eq!(h.st.selected, next, "{style:?}: the neighbour shown");
+        // the harness keeps the closed conversation: back to Bob's
+        h.st.selected = Some(BOB);
+        h.settle();
         h.press(control_id("head-search-filled"));
         assert!(h.st.searches.get(&Some(BOB)).is_some_and(|s| s.find.is_some()), "{style:?}: find");
         h.press(control_id("head-search-filled"));
@@ -564,12 +636,14 @@ fn the_head_acts() {
             (aurora_i18n::tr!("ui-chat-give-from-inventory"), "give"),
             (aurora_i18n::tr!("ui-call-add-people"), "add"),
             (aurora_i18n::tr!("common-block"), "block"),
+            (aurora_i18n::tr!("ui-chat-send-system-info"), "sysinfo"),
         ] {
             h.press(control_id("head-dots-filled"));
             h.press_text(row);
             let actions = h.take();
             let ok = match wanted {
                 "teleport" => has(&actions, |a| matches!(a, ConvAction::OfferTeleport(id) if *id == BOB)),
+                "sysinfo" => has(&actions, |a| matches!(a, ConvAction::SendSysinfo(id) if *id == BOB)),
                 "give" => has(&actions, |a| matches!(a, ConvAction::OpenInventory)),
                 "add" => has(&actions, |a| matches!(a, ConvAction::PickPeople(id) if *id == BOB)),
                 _ => has(&actions, |a| matches!(a, ConvAction::ToggleBlock(id) if *id == BOB)),
@@ -665,6 +739,98 @@ fn the_head_acts() {
     }
 }
 
+/// Clicking a group chat's name or picture at the top of the conversation opens
+/// its group profile in every chat style (docked or detached), while
+/// conferences, nearby chat, and 1:1 IMs keep their own behavior.
+#[test]
+fn group_head_opens_group_profile_in_every_style() {
+    for style in ALL {
+        for detached in [false, true] {
+            let mut h = H::new(style);
+            let session = h.world.groups.sessions.entry(GROUP).or_default();
+            session.group = true;
+            session.name = "Builders".to_owned();
+            if detached {
+                crate::ui::widgets::place_floater(&h.frames.ctx, "conversations", egui::pos2(20.0, 20.0), egui::vec2(620.0, 520.0));
+                h.st.pop_out(Some(GROUP));
+                crate::ui::widgets::place_floater(
+                    &h.frames.ctx,
+                    &super::popout::floater_id(Some(GROUP)),
+                    egui::pos2(680.0, 40.0),
+                    egui::vec2(480.0, 460.0),
+                );
+                h.settle();
+            } else {
+                h.open(Some(GROUP));
+            }
+            let what = format!("{style:?}, detached={detached}");
+            let pic_id = match (style.workspace(), detached) {
+                (true, false) => control_id("head-pic"),
+                (false, false) => classic_id("head-pic"),
+                (true, true) => egui::Id::unique(("conv_control", "head-pic", Some(Some(GROUP)))),
+                (false, true) => egui::Id::unique(("conv_classic", "head-pic", Some(Some(GROUP)))),
+            };
+            // Clicking the group name opens the group profile and shows a link cursor.
+            let name_pos = h.text_rect("Builders").center();
+            let out = h.frame_out(vec![egui::Event::PointerMoved(name_pos)]);
+            assert_eq!(out.cursor_icon, egui::CursorIcon::PointingHand, "{what}: group name cursor");
+            h.at(name_pos);
+            assert_eq!(
+                crate::ui::group_profile::take_open_request(&h.frames.ctx),
+                Some(GROUP),
+                "{what}: clicking group name opens group profile"
+            );
+            // Clicking the group picture / insignia opens the group profile as well.
+            let pic_pos = h.shown(pic_id).expect("head pic shown").center();
+            let out = h.frame_out(vec![egui::Event::PointerMoved(pic_pos)]);
+            assert_eq!(out.cursor_icon, egui::CursorIcon::PointingHand, "{what}: group pic cursor");
+            h.at(pic_pos);
+            assert_eq!(
+                crate::ui::group_profile::take_open_request(&h.frames.ctx),
+                Some(GROUP),
+                "{what}: clicking group pic opens group profile"
+            );
+            if !detached {
+                // Conferences and nearby chat have no group profile.
+                for (conv, label) in [(Some(MEETING), "Meeting"), (None, aurora_i18n::tr!("common-nearby-chat"))] {
+                    h.open(conv);
+                    let pos = h.text_rect(label).center();
+                    let out = h.frame_out(vec![egui::Event::PointerMoved(pos)]);
+                    assert_ne!(out.cursor_icon, egui::CursorIcon::PointingHand, "{style:?}: {label} name cursor");
+                    h.at(pos);
+                    assert_eq!(
+                        crate::ui::group_profile::take_open_request(&h.frames.ctx),
+                        None,
+                        "{style:?}: clicking {label} opens no group profile"
+                    );
+                    if style.workspace() {
+                        assert!(h.shown(pic_id).is_none(), "{style:?}: {label} pic has no click target");
+                    } else {
+                        let pic_pos = h.shown(pic_id).expect("classic head pic shown").center();
+                        let out = h.frame_out(vec![egui::Event::PointerMoved(pic_pos)]);
+                        assert_ne!(out.cursor_icon, egui::CursorIcon::PointingHand, "{style:?}: {label} pic cursor");
+                        h.at(pic_pos);
+                        assert_eq!(
+                            crate::ui::group_profile::take_open_request(&h.frames.ctx),
+                            None,
+                            "{style:?}: clicking {label} pic opens no group profile"
+                        );
+                    }
+                }
+                // A 1:1 IM still opens the resident profile on click, not a group profile.
+                h.open(Some(BOB));
+                let pos = h.text_rect("Bob Doe").center();
+                h.at(pos);
+                assert!(
+                    has(&h.take(), |a| matches!(a, ConvAction::Profile(id) if *id == BOB)),
+                    "{style:?}: 1:1 IM opens resident profile"
+                );
+                assert_eq!(crate::ui::group_profile::take_open_request(&h.frames.ctx), None);
+            }
+        }
+    }
+}
+
 /// A message under the pointer: no buttons, the arrow (no text cursor); its
 /// right click copies it, quotes it in the field, and holds its author's
 /// menu (the profile among them).
@@ -719,9 +885,43 @@ fn the_message_menu_acts() {
     }
 }
 
+/// A full-size line of an object: its name, and in the workspace styles its
+/// message, offer to inspect and to ignore it, like Firestorm's object menu.
+#[test]
+fn an_objects_full_size_line_offers_to_ignore_it_in_every_style() {
+    const THING: Uuid = Uuid::from_u128(0x0b1ec7);
+    for style in ALL {
+        for on_name in [true, false] {
+            if !style.workspace() && !on_name {
+                continue;
+            }
+            let mut h = H::new(style);
+            h.world.chat.push_back(line(
+                "Worn Thing",
+                THING,
+                ChatKind::Object(aurora_net::ChatType::Normal),
+                "a word from an object",
+            ));
+            h.open(None);
+            let at = h.text_rect(if on_name { "Worn Thing" } else { "a word from an object" }).center();
+            h.right_click(at);
+            assert!(h.painted(aurora_i18n::tr!("ui-context-inspect-2")), "{style:?} {on_name}: inspect");
+            h.press_text(aurora_i18n::tr!("common-ignore"));
+            let asked = crate::ui::context::take_requests(&h.frames.ctx);
+            assert!(
+                asked.iter().any(
+                    |a| matches!(a, crate::ui::context::CtxAction::ToggleBlockObject { id, name } if *id == THING && name == "Worn Thing")
+                ),
+                "{style:?} {on_name}: ignore"
+            );
+        }
+    }
+}
+
 /// A double click on the first or the last word of a message, then Ctrl+C,
 /// copies that word alone: not the line's "[time] Name: " prefix, nor the
-/// whole message.
+/// whole message. A third click copies the message as a drag from the start
+/// of its line does, with the prefix.
 #[test]
 fn a_double_clicked_word_is_copied_alone() {
     for style in [ChatStyle::Aurora, ChatStyle::Compact] {
@@ -734,6 +934,7 @@ fn a_double_clicked_word_is_copied_alone() {
             ] {
                 let mut h = H::new(style);
                 let message = line("Jane", JANE, ChatKind::Im, said);
+                let prefixed = format!("{}{said}", super::copy_prefix(&message, &message.from));
                 if let Some(id) = conversation {
                     h.world.social.session_mut(id).lines = [message].into();
                 } else {
@@ -759,6 +960,59 @@ fn a_double_clicked_word_is_copied_alone() {
                     _ => None,
                 });
                 assert_eq!(copied.as_deref(), Some(word), "{style:?}, {conversation:?}, {said:?}");
+                // a third click selects the whole paragraph, copied as a drag
+                // from the start of the line: with the "[time] Name: " prefix
+                h.frame(vec![button(true)]);
+                h.frame(vec![button(false)]);
+                h.settle();
+                let copied = h.frame_out(vec![egui::Event::Copy]).commands.into_iter().find_map(|c| match c {
+                    egui::OutputCommand::CopyText(t) => Some(t),
+                    _ => None,
+                });
+                assert_eq!(copied, Some(prefixed), "{style:?}, {conversation:?}, {said:?}");
+            }
+        }
+    }
+}
+
+/// A triple click on a message of two paragraphs, then Ctrl+C: the first
+/// paragraph is copied with the line's "[time] Name: " prefix, the one after
+/// the line break without it.
+#[test]
+fn a_triple_clicked_paragraph_after_a_line_break_is_copied_without_the_prefix() {
+    let said = "first paragraph\nsecond one";
+    for style in [ChatStyle::Aurora, ChatStyle::Compact] {
+        for conversation in [None, Some(JANE)] {
+            let message = line("Jane", JANE, ChatKind::Im, said);
+            let prefix = super::copy_prefix(&message, &message.from);
+            // the upper and the lower row of the message
+            for (row, expected) in [(0.25, format!("{prefix}first paragraph")), (0.75, "second one".into())] {
+                let mut h = H::new(style);
+                if let Some(id) = conversation {
+                    h.world.social.session_mut(id).lines = [message.clone()].into();
+                } else {
+                    h.world.chat = [message.clone()].into();
+                }
+                h.open(conversation);
+                let text = h.text_rect(said);
+                let pos = egui::pos2(text.left() + 20.0, text.top() + text.height() * row);
+                let button = |pressed| egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Default::default(),
+                };
+                h.frame(vec![egui::Event::PointerMoved(pos)]);
+                for _ in 0..3 {
+                    h.frame(vec![button(true)]);
+                    h.frame(vec![button(false)]);
+                }
+                h.settle();
+                let copied = h.frame_out(vec![egui::Event::Copy]).commands.into_iter().find_map(|c| match c {
+                    egui::OutputCommand::CopyText(t) => Some(t),
+                    _ => None,
+                });
+                assert_eq!(copied, Some(expected), "{style:?}, {conversation:?}, row {row}");
             }
         }
     }
@@ -909,9 +1163,11 @@ fn pasted_transcripts_keep_paragraphs_in_the_nearby_chat_bar() {
     assert_eq!(sent.message, text);
 }
 
-/// The explicit paragraph chord wins over completion and sending, including
-/// in the narrower detached panes. Shift+Enter whispers only in nearby chat;
-/// in IMs and sessions it neither completes, inserts nor sends anything.
+/// The New line keys (Shift+Enter, and the Legacy Viewer's Ctrl+Shift+Enter)
+/// win over completion and sending in every conversation, the nearby chat
+/// included, including in the narrower detached panes (human request of
+/// 2026-11-15: Shift+Enter whispered in nearby chat and did nothing
+/// elsewhere).
 #[test]
 fn paragraph_chord_edits_without_sending_in_every_conversation_style() {
     for style in ALL {
@@ -931,34 +1187,29 @@ fn paragraph_chord_edits_without_sending_in_every_conversation_style() {
                     h.settle();
                 }
                 h.type_text("first :hea");
-                if conversation.is_some() {
-                    h.history_key(egui::Key::Enter, egui::Modifiers::SHIFT);
-                    assert_eq!(h.st.draft_mut(conversation), "first :hea", "Shift+Enter leaves completion alone");
-                    assert!(!h.take().iter().any(|a| matches!(a, ConvAction::Local(_) | ConvAction::Im { .. })));
-                }
-                h.history_key(egui::Key::Enter, egui::Modifiers::CTRL | egui::Modifiers::SHIFT);
-                assert_eq!(h.st.draft_mut(conversation), "first :hea\n", "{style:?}, detached={detached}");
+                h.history_key(egui::Key::Enter, egui::Modifiers::SHIFT);
+                assert_eq!(
+                    h.st.draft_mut(conversation),
+                    "first :hea\n",
+                    "{style:?}, {conversation:?}, detached={detached}: Shift+Enter breaks the line, completion left alone"
+                );
                 assert!(!h.take().iter().any(|a| matches!(a, ConvAction::Local(_) | ConvAction::Im { .. })));
                 h.type_text("second 🙂");
-                h.history_key(egui::Key::Enter, egui::Modifiers::SHIFT);
-                if conversation.is_some() {
-                    assert_eq!(
-                        h.st.draft_mut(conversation),
-                        "first :hea\nsecond 🙂",
-                        "Shift+Enter preserves the draft"
-                    );
-                    assert!(!h.take().iter().any(|a| matches!(a, ConvAction::Local(_) | ConvAction::Im { .. })));
-                    let field = egui::Id::unique(("conv_input", conversation));
-                    assert!(h.frames.ctx.memory(|m| m.has_focus(field)), "Shift+Enter preserves focus");
-                    h.history_key(egui::Key::Enter, egui::Modifiers::NONE);
-                }
+                h.history_key(egui::Key::Enter, egui::Modifiers::CTRL | egui::Modifiers::SHIFT);
+                assert_eq!(h.st.draft_mut(conversation), "first :hea\nsecond 🙂\n", "the Legacy chord too");
+                assert!(!h.take().iter().any(|a| matches!(a, ConvAction::Local(_) | ConvAction::Im { .. })));
+                let field = egui::Id::unique(("conv_input", conversation));
+                assert!(h.frames.ctx.memory(|m| m.has_focus(field)), "a line break keeps the focus");
+                h.type_text("third");
+                h.history_key(egui::Key::Enter, egui::Modifiers::NONE);
+                let text = "first :hea\nsecond 🙂\nthird";
                 assert!(
                     h.take().iter().any(|a| match a {
-                        ConvAction::Local(out) => out.message == "first :hea\nsecond 🙂" && out.chat_type == aurora_net::ChatType::Whisper,
-                        ConvAction::Im { to, text } => Some(*to) == conversation && text == "first :hea\nsecond 🙂",
+                        ConvAction::Local(out) => out.message == text && out.chat_type == aurora_net::ChatType::Normal,
+                        ConvAction::Im { to, text: sent } => Some(*to) == conversation && sent == text,
                         _ => false,
                     }),
-                    "{style:?}, {conversation:?}, detached={detached}: the expected send shortcut"
+                    "{style:?}, {conversation:?}, detached={detached}: Enter sends the paragraphs"
                 );
             }
         }
@@ -996,7 +1247,13 @@ fn paragraph_editor_wraps_scrolls_and_collapses_in_every_style() {
         h.settle();
         let expanded = rect(&h);
         assert!(expanded.height() > before.height() + 10.0, "{style:?}: wraps");
-        assert!(expanded.height() <= 100.0, "{style:?}: bounded viewport {expanded:?}");
+        // four rows, or in Aurora's workspace up to thirty, within what the
+        // window has room for (`compose::field_cap`)
+        let bound = if style.workspace() { 30.0 * 20.0 } else { 100.0 };
+        assert!(expanded.height() <= bound, "{style:?}: bounded viewport {expanded:?}");
+        if style.workspace() {
+            assert!(expanded.height() > 100.0, "{style:?}: past four rows {expanded:?}");
+        }
         for _ in 0..30 {
             h.frame(Vec::new());
         }
@@ -1015,11 +1272,137 @@ fn paragraph_editor_wraps_scrolls_and_collapses_in_every_style() {
     }
 }
 
+/// Enter on an empty conversation field keeps the keyboard, like the Legacy
+/// Viewer's nearby chat window, unless "Enter toggles typing in
+/// conversations" gives it back to the world, in every conversation. The
+/// field that takes the keyboard becomes the last one used.
+#[test]
+fn enter_on_an_empty_conversation_field_returns_to_the_world_by_its_rule() {
+    for style in ALL {
+        for (conversation, toggles, leaves) in [
+            (None, false, false),
+            (None, true, true),
+            (Some(JANE), false, false),
+            (Some(JANE), true, true),
+            (Some(GROUP), false, false),
+            (Some(GROUP), true, true),
+        ] {
+            let mut h = H::new(style);
+            h.st.keep_focus = true;
+            h.st.enter_toggles = toggles;
+            h.open(conversation);
+            let field = egui::Id::unique(("conv_input", conversation));
+            assert!(
+                h.frames.ctx.memory(|m| m.has_focus(field)),
+                "{style:?} {conversation:?}: opened with the keyboard"
+            );
+            assert_eq!(
+                h.st.last_field,
+                super::ChatField::Conversation(conversation),
+                "{style:?}: the field used"
+            );
+            h.enter(egui::Modifiers::NONE);
+            assert_eq!(
+                !h.frames.ctx.memory(|m| m.has_focus(field)),
+                leaves,
+                "{style:?} {conversation:?} toggles {toggles}"
+            );
+            assert!(h.take().is_empty(), "an empty Enter sends nothing");
+        }
+    }
+}
+
+/// "Conversations window only" (#2696): the nearby field takes the chat
+/// bar's rule in every style. An empty Enter and Escape give the keyboard
+/// back to the world; after a message it follows "Keep the chat bar active
+/// after sending". The IMs keep their own rule.
+#[test]
+fn the_nearby_field_takes_the_chat_bars_rule_in_conversations_window_only() {
+    let escape = || {
+        vec![egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }]
+    };
+    for style in ALL {
+        let field = egui::Id::unique(("conv_input", None::<Uuid>));
+        let focused = |h: &H| h.frames.ctx.memory(|m| m.has_focus(field));
+        let fresh = |keep: bool| {
+            let mut h = H::new(style);
+            h.st.bar_mode = crate::settings::ChatBar::ConversationsOnly;
+            h.st.keep_focus = keep;
+            h.open(None);
+            assert!(focused(&h), "{style:?}: opened with the keyboard");
+            h
+        };
+        // an empty Enter: back to the world, nothing sent
+        let mut h = fresh(true);
+        h.enter(egui::Modifiers::NONE);
+        assert!(!focused(&h), "{style:?}: an empty Enter gives the keyboard back");
+        assert!(h.take().is_empty());
+        // a message: kept, or let go, as the setting says
+        for keep in [true, false] {
+            let mut h = fresh(keep);
+            h.type_text("hello");
+            h.enter(egui::Modifiers::NONE);
+            assert!(!h.take().is_empty(), "{style:?}: sent");
+            assert_eq!(focused(&h), keep, "{style:?} keep {keep}");
+        }
+        // Escape: back to the world, the draft kept
+        let mut h = fresh(true);
+        h.type_text("draft");
+        h.frame(escape());
+        h.settle();
+        assert!(!focused(&h), "{style:?}: Escape gives the keyboard back");
+        assert!(!h.frames.ctx.text_edit_focused(), "{style:?}: no field holds the keyboard");
+        assert_eq!(h.st.draft_mut(None).as_str(), "draft");
+        // an IM is not the chat bar: its empty Enter keeps the keyboard
+        let mut h = H::new(style);
+        h.st.bar_mode = crate::settings::ChatBar::ConversationsOnly;
+        h.open(Some(JANE));
+        h.enter(egui::Modifiers::NONE);
+        let im = egui::Id::unique(("conv_input", Some(JANE)));
+        assert!(h.frames.ctx.memory(|m| m.has_focus(im)), "{style:?}: the IM keeps it");
+    }
+}
+
+/// The Enter that asked for the keyboard (Enter from the world, "Enter
+/// returns to the last chat field used") is not taken as an empty Enter in
+/// the field it focused: the field keeps the keyboard and sends nothing.
+#[test]
+fn the_enter_that_focuses_a_conversation_is_not_typed_in_it() {
+    for style in ALL {
+        for conversation in [None, Some(JANE)] {
+            let mut h = H::new(style);
+            h.st.enter_toggles = true;
+            h.open(conversation);
+            h.enter(egui::Modifiers::NONE);
+            let field = egui::Id::unique(("conv_input", conversation));
+            assert!(
+                !h.frames.ctx.memory(|m| m.has_focus(field)),
+                "{style:?} {conversation:?}: given back"
+            );
+            h.st.conv_focus_request = true;
+            h.enter(egui::Modifiers::NONE);
+            assert!(
+                h.frames.ctx.memory(|m| m.has_focus(field)),
+                "{style:?} {conversation:?}: focused again"
+            );
+            assert!(h.take().is_empty());
+        }
+    }
+}
+
 #[test]
 fn nearby_bar_paragraph_chord_keeps_focus_and_volume_shortcuts() {
     let mut h = H::new(ChatStyle::Aurora);
     h.st.keep_focus = true;
     h.st.focus_request = true;
+    // a Shout key set (none by default): the Legacy Viewer's Ctrl+Enter
+    super::shortcuts::publish(&h.frames.ctx, &super::shortcuts::ctrl_enter_shout());
     h.bar_frame(Vec::new());
     h.bar_frame(Vec::new());
     h.bar_frame(vec![egui::Event::Paste("first\r\nsecond\rthird".into())]);
@@ -1035,8 +1418,27 @@ fn nearby_bar_paragraph_chord_keeps_focus_and_volume_shortcuts() {
     assert_eq!(sent.chat_type, aurora_net::ChatType::Shout);
     h.bar_frame(Vec::new());
     h.bar_frame(vec![egui::Event::Text("whisper".into())]);
-    let sent = h.bar_frame(history_events(egui::Key::Enter, egui::Modifiers::SHIFT)).unwrap();
+    // Shift+Enter is the line break: whisper has no key until one is set
+    assert!(h.bar_frame(history_events(egui::Key::Enter, egui::Modifiers::SHIFT)).is_none());
+    assert_eq!(h.st.input, "whisper\n");
+    // Preferences › Shortcuts › Chat: Whisper on F5, New line taken off
+    let mut kb = crate::keybinds::KeyBindings::default();
+    let f5 = crate::keybinds::Binding::captured(
+        crate::keybinds::Input::key(winit::keyboard::KeyCode::F5),
+        crate::keybinds::Mods::default(),
+    );
+    kb.set(crate::keybinds::Action::ChatWhisper, 0, Some(f5));
+    kb.set(crate::keybinds::Action::ChatNewLine, 0, None);
+    kb.set(crate::keybinds::Action::ChatNewLine, 1, None);
+    super::shortcuts::publish(&h.frames.ctx, &kb);
+    let sent = h.bar_frame(history_events(egui::Key::F5, egui::Modifiers::NONE)).unwrap();
     assert_eq!(sent.chat_type, aurora_net::ChatType::Whisper);
+    assert_eq!(sent.message, "whisper");
+    h.bar_frame(Vec::new());
+    h.bar_frame(vec![egui::Event::Text("plain".into())]);
+    // with no New line key, Shift+Enter sends at the selected volume
+    let sent = h.bar_frame(history_events(egui::Key::Enter, egui::Modifiers::SHIFT)).unwrap();
+    assert_eq!(sent.chat_type, aurora_net::ChatType::Normal);
 }
 
 /// A long conversation just opened still measures the rows above the end,
@@ -1581,6 +1983,202 @@ fn the_message_menu_retains_copy_and_quote_after_eviction() {
     }
 }
 
+/// The field's emoji and GIF pickers (#4867), in every style: a click in a
+/// picker keeps it, the GIF button swaps the emoji picker for its own, and
+/// a click away from the picker closes it, as the chat bar's does.
+#[test]
+fn a_click_away_closes_the_pickers() {
+    let away = egui::pos2(1150.0, 750.0);
+    for style in ALL {
+        let mut h = H::new(style);
+        h.st.gifs.demo = true;
+        h.open(Some(JANE));
+        let (emoji_button, gif_button) = if style.workspace() {
+            (control_id("box-mood-smile-filled"), control_id("box-gif"))
+        } else {
+            (classic_id("mood-smile-filled"), classic_id("gif"))
+        };
+        let picker = |h: &H, name: &str| {
+            h.frames
+                .ctx
+                .memory(|m| m.area_rect(egui::Id::unique((name, Some(JANE)))))
+                .unwrap_or_else(|| panic!("{style:?}: {name} is not shown"))
+        };
+        h.press(emoji_button);
+        assert!(h.st.emoji_open, "{style:?}: the emoji picker opens");
+        // its margin: no emoji under the click
+        let inside = picker(&h, "emoji_picker").left_top() + egui::vec2(3.0, 3.0);
+        assert!(!h.shown(emoji_button).unwrap().contains(away), "{style:?}");
+        h.at(inside);
+        assert!(h.st.emoji_open, "{style:?}: a click in the picker keeps it");
+        h.at(away);
+        assert!(!h.st.emoji_open, "{style:?}: a click away closes the emoji picker");
+        h.press(emoji_button);
+        h.press(gif_button);
+        assert!(h.st.gif_open && !h.st.emoji_open, "{style:?}: the GIF button swaps the pickers");
+        let inside = picker(&h, "gif_picker").left_top() + egui::vec2(3.0, 3.0);
+        h.at(inside);
+        assert!(h.st.gif_open, "{style:?}: a click in the GIF picker keeps it");
+        h.at(away);
+        assert!(!h.st.gif_open, "{style:?}: a click away closes the GIF picker");
+    }
+}
+
+/// The field's pickers in every style (#4867): a press away closes one
+/// before its release, the press that starts a drag included; a click on
+/// its own button closes it, and does not open it again; another
+/// conversation shown, however it came, closes it.
+#[test]
+fn a_press_away_or_another_conversation_closes_the_pickers() {
+    let away = egui::pos2(1150.0, 750.0);
+    for style in ALL {
+        let mut h = H::new(style);
+        h.st.gifs.demo = true;
+        h.open(Some(JANE));
+        let (emoji_button, gif_button) = if style.workspace() {
+            (control_id("box-mood-smile-filled"), control_id("box-gif"))
+        } else {
+            (classic_id("mood-smile-filled"), classic_id("gif"))
+        };
+        h.press(emoji_button);
+        assert!(h.st.emoji_open, "{style:?}: the emoji picker opens");
+        h.press(emoji_button);
+        assert!(!h.st.emoji_open, "{style:?}: its button closes it");
+        h.press(emoji_button);
+        h.frame(vec![egui::Event::PointerMoved(away)]);
+        h.frame(vec![egui::Event::PointerButton {
+            pos: away,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: Default::default(),
+        }]);
+        assert!(!h.st.emoji_open, "{style:?}: a press away closes it, before its release");
+        h.frame(vec![egui::Event::PointerMoved(away + egui::vec2(-40.0, 0.0))]);
+        h.frame(vec![egui::Event::PointerButton {
+            pos: away + egui::vec2(-40.0, 0.0),
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: Default::default(),
+        }]);
+        h.settle();
+        for gif in [false, true] {
+            h.press(if gif { gif_button } else { emoji_button });
+            assert!(h.st.emoji_open != gif && h.st.gif_open == gif, "{style:?}: a picker opens");
+            // as a name's menu or a conversation asking for the front does
+            h.st.selected = Some(BOB);
+            h.settle();
+            assert!(!h.st.emoji_open && !h.st.gif_open, "{style:?}: Bob's conversation closes it");
+            h.open(Some(JANE));
+            assert!(!h.st.emoji_open && !h.st.gif_open, "{style:?}: back on Jane's, it stays closed");
+        }
+    }
+}
+
+/// A press on the world closes a picker without leaving it the keyboard
+/// (#4867): the world gives the keyboard up before the frame, the picker's
+/// search takes it back as it draws, and lets it go as the picker closes.
+#[test]
+fn a_press_on_the_world_leaves_the_closed_picker_no_keyboard() {
+    let away = egui::pos2(1150.0, 750.0);
+    for style in ALL {
+        for gif in [false, true] {
+            let mut h = H::new(style);
+            h.st.gifs.demo = true;
+            h.open(Some(JANE));
+            let button = match (style.workspace(), gif) {
+                (true, false) => control_id("box-mood-smile-filled"),
+                (true, true) => control_id("box-gif"),
+                (false, false) => classic_id("mood-smile-filled"),
+                (false, true) => classic_id("gif"),
+            };
+            h.press(button);
+            h.frame(Vec::new());
+            assert!(h.st.emoji_open || h.st.gif_open, "{style:?} gif {gif}: the picker opens");
+            assert!(
+                h.frames.ctx.memory(|m| m.focused()).is_some(),
+                "{style:?} gif {gif}: its search has the keyboard"
+            );
+            // what the world does with the press, before the frame
+            h.frames.ctx.memory_mut(|m| {
+                if let Some(id) = m.focused() {
+                    m.surrender_focus(id);
+                }
+            });
+            h.frame(vec![
+                egui::Event::PointerMoved(away),
+                egui::Event::PointerButton {
+                    pos: away,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: Default::default(),
+                },
+            ]);
+            assert!(
+                !h.st.emoji_open && !h.st.gif_open,
+                "{style:?} gif {gif}: a press on the world closes it"
+            );
+            assert!(
+                h.frames.ctx.memory(|m| m.focused()).is_none(),
+                "{style:?} gif {gif}: the closed picker keeps no keyboard"
+            );
+        }
+    }
+}
+
+/// A quick right click (press and release in one frame, a touchpad tap) on
+/// the GIF button opens its menu in the frame the emoji picker checks the
+/// press: the picker still closes, as a menu egui opens takes no pointer in
+/// its first frame (`egui::Popup` lays it out first), so the press is the
+/// button's (#4867).
+#[test]
+fn a_quick_right_click_on_the_gif_button_closes_the_emoji_picker() {
+    for style in ALL {
+        let mut h = H::new(style);
+        h.st.gifs.demo = true;
+        h.open(Some(JANE));
+        let (emoji_button, gif_button) = if style.workspace() {
+            (control_id("box-mood-smile-filled"), control_id("box-gif"))
+        } else {
+            (classic_id("mood-smile-filled"), classic_id("gif"))
+        };
+        h.press(emoji_button);
+        assert!(h.st.emoji_open, "{style:?}: the emoji picker opens");
+        let pos = h.shown(gif_button).unwrap().center();
+        h.frame(vec![egui::Event::PointerMoved(pos)]);
+        let button = |pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Secondary,
+            pressed,
+            modifiers: Default::default(),
+        };
+        h.frame(vec![button(true), button(false)]);
+        assert!(egui::Popup::is_any_open(&h.frames.ctx), "{style:?}: the GIF button's menu opens");
+        assert!(!h.st.emoji_open, "{style:?}: a quick right click on the GIF button closes it");
+    }
+}
+
+/// A picker open before the window first draws, as the startup demos open
+/// one (`AURORA_DEMO_EMOJI_PICKER`, `AURORA_DEMO_GIFS`), stays open: no
+/// conversation was shown before, so none changed (#4867).
+#[test]
+fn a_picker_open_before_the_first_frame_stays_open() {
+    for style in ALL {
+        for gif in [false, true] {
+            let mut h = H::new(style);
+            h.st.gifs.demo = true;
+            assert!(h.st.picker_view.is_none(), "{style:?}: not drawn yet");
+            h.st.selected = Some(JANE);
+            h.st.emoji_open = !gif;
+            h.st.gif_open = gif;
+            h.settle();
+            assert!(h.st.emoji_open != gif && h.st.gif_open == gif, "{style:?}: the picker stays open");
+            h.st.selected = Some(BOB);
+            h.settle();
+            assert!(!h.st.emoji_open && !h.st.gif_open, "{style:?}: another conversation closes it");
+        }
+    }
+}
+
 /// The field (Aurora, Compact): emoji, the volume's menu, inventory,
 /// channel, send.
 #[test]
@@ -1607,14 +2205,20 @@ fn the_field_acts() {
             ),
             "{style:?}: /5 without the chip"
         );
-        // shown by the preferences: "/5" opening the text, back to 0 from it
+        // shown by the preferences: its own channel, back to 0 from its menu,
+        // the draft untouched
         h.st.show_channel = true;
+        h.st.chat_channel = 5;
         h.open(None);
-        h.type_text("/5 secret");
-        assert!(h.painted("/5"), "{style:?}: the chip shows the channel");
+        h.type_text("secret");
+        assert!(
+            h.shown(control_id("box-channel")).is_some(),
+            "{style:?}: the chip shows the channel"
+        );
         h.press(control_id("box-channel"));
         h.press_text(aurora_i18n::tr!("ui-chat-channel-reset"));
-        assert_eq!(h.st.draft_mut(None), "secret", "{style:?}: channel reset");
+        assert_eq!(h.st.chat_channel, 0, "{style:?}: channel reset");
+        assert_eq!(h.st.draft_mut(None), "secret", "{style:?}: the draft stays");
         // shout from the volume's menu, then say what was typed
         assert!(h.painted(aurora_i18n::tr!("ui-chat-volume-say")), "{style:?}: the volume named");
         h.press(control_id("box-volume"));
@@ -1643,7 +2247,10 @@ fn the_field_acts() {
         for _ in 0..20 {
             h.settle();
         }
-        assert!(h.shown(control_id("box-channel")).is_none(), "{style:?}: narrow, no channel chip");
+        assert!(
+            h.shown(control_id("box-channel")).is_some(),
+            "{style:?}: the channel chip stays in a narrow field"
+        );
         h.press(control_id("box-volume"));
         h.press_text(aurora_i18n::tr!("ui-chat-volume-whisper"));
         assert_eq!(h.st.volume, Volume::Whisper, "{style:?}: narrow");
@@ -1670,6 +2277,156 @@ fn the_field_acts() {
             "{style:?}: send"
         );
     }
+}
+
+#[test]
+fn the_channel_selector_works_in_every_conversation_style() {
+    for style in ALL {
+        let mut h = H::new(style);
+        h.open(None);
+        assert!(h.shown(control_id("box-channel")).is_none(), "{style:?}: hidden by default");
+
+        h.st.show_channel = true;
+        h.st.chat_channel = 5;
+        h.open(None);
+        assert!(h.shown(control_id("box-channel")).is_some(), "{style:?}: shown when enabled");
+        // the selector's channel, kept for the next message (the Legacy spinner)
+        for line in ["secret", "again"] {
+            h.st.conv_focus_request = true;
+            h.settle();
+            h.type_text(line);
+            h.enter(Default::default());
+            assert!(
+                has(
+                    &h.take(),
+                    |a| matches!(a, ConvAction::Local(c) if c.channel == 5 && c.message == line)
+                ),
+                "{style:?}: {line} sent on the selected channel"
+            );
+        }
+        // a typed "/n" wins over the selector
+        h.st.conv_focus_request = true;
+        h.settle();
+        h.type_text("/7 typed");
+        h.enter(Default::default());
+        assert!(
+            has(
+                &h.take(),
+                |a| matches!(a, ConvAction::Local(c) if c.channel == 7 && c.message == "typed")
+            ),
+            "{style:?}: the typed channel"
+        );
+        // Alt+Enter wraps the text first, then the selector's channel applies
+        h.st.conv_focus_request = true;
+        h.settle();
+        h.type_text("brb");
+        h.enter(egui::Modifiers::ALT);
+        assert!(
+            has(
+                &h.take(),
+                |a| matches!(a, ConvAction::Local(c) if c.channel == 5 && c.message == "(( brb ))")
+            ),
+            "{style:?}: OOC on the selected channel"
+        );
+        // the chip's menu sets it back to 0
+        h.press(control_id("box-channel"));
+        h.press_text(aurora_i18n::tr!("ui-chat-channel-reset"));
+        assert_eq!(h.st.chat_channel, 0, "{style:?}: reset from the chip");
+        // hidden, the selector's channel no longer applies
+        h.st.chat_channel = 5;
+        h.st.show_channel = false;
+        h.st.conv_focus_request = true;
+        h.settle();
+        h.type_text("plain");
+        h.enter(Default::default());
+        assert!(
+            has(
+                &h.take(),
+                |a| matches!(a, ConvAction::Local(c) if c.channel == 0 && c.message == "plain")
+            ),
+            "{style:?}: hidden selector, channel 0"
+        );
+    }
+}
+
+#[test]
+fn the_chat_bar_channel_selector_is_visible_and_keeps_the_channel_on_send() {
+    let mut h = H::new(ChatStyle::Aurora);
+    h.st.show_channel = true;
+    h.st.input = "hello".into();
+    h.st.focus_request = true;
+    h.bar_frame(Vec::new());
+    let chip = h.shown(super::bar_channel_id()).expect("the nearby chat bar shows the selector");
+    h.bar_at(chip.center());
+    let value = h.text_rect("0").center();
+    let button = |pos, pressed| egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: Default::default(),
+    };
+    h.bar_frame(vec![egui::Event::PointerMoved(value)]);
+    h.bar_frame(vec![button(value, true)]);
+    h.bar_frame(vec![egui::Event::PointerMoved(value + egui::vec2(25.0, 0.0))]);
+    h.bar_frame(vec![button(value + egui::vec2(25.0, 0.0), false)]);
+    assert_eq!(h.st.chat_channel, 5, "the selector chooses channel 5");
+    assert_eq!(h.st.input, "hello", "the draft is not rewritten");
+    let input = h.shown(super::bar_input_id()).expect("the local chat input is visible");
+    h.bar_at(input.center());
+
+    let sent = h.bar_frame(vec![egui::Event::Key {
+        key: egui::Key::Enter,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: Default::default(),
+    }]);
+    assert!(
+        sent.is_some_and(|chat| chat.channel == 5 && chat.message == "hello"),
+        "the selected channel and text are sent from the chat bar"
+    );
+    assert_eq!(h.st.chat_channel, 5, "the channel is kept for the next message");
+}
+
+/// Typing for the selector's channel off 0 starts no typing animation, as
+/// FSNearbyChat::handleChatBarKeystroke given the spinner's channel; on 0,
+/// or with the selector hidden, it does.
+#[test]
+fn typing_for_another_channel_is_not_typing_aloud() {
+    for (shown, channel, aloud) in [(true, 5, false), (true, 0, true), (false, 5, true)] {
+        let mut h = H::new(ChatStyle::Aurora);
+        h.st.show_channel = shown;
+        h.st.chat_channel = channel;
+        h.st.focus_request = true;
+        h.bar_frame(Vec::new());
+        h.bar_frame(Vec::new());
+        h.bar_frame(vec![egui::Event::Text("hello".into())]);
+        assert_eq!(h.st.input, "hello", "typed in the bar");
+        assert_eq!(
+            h.st.local_typing_update(std::time::Instant::now()),
+            aloud.then_some(true),
+            "selector shown {shown}, channel {channel}"
+        );
+    }
+}
+
+/// With "Autohide the chat bar" on and an empty bar, the channel's menu keeps
+/// the bar shown once the pointer leaves the bar for the menu.
+#[test]
+fn an_autohidden_bar_stays_while_its_channel_menu_is_open() {
+    let mut h = H::new(ChatStyle::Aurora);
+    h.st.show_channel = true;
+    h.st.bar_mode = crate::settings::ChatBar::WhenTyping;
+    h.st.focus_request = true;
+    h.bar_frame(Vec::new());
+    let chip = h.shown(super::bar_channel_id()).expect("the nearby chat bar shows the selector");
+    h.bar_at(chip.center());
+    assert!(h.st.bar_channel_open, "the chip's menu is open");
+    // the click on the chip took the keyboard from the empty field, and the
+    // pointer is in the menu, off the bar
+    h.st.has_focus = false;
+    h.st.bar_hovered = false;
+    assert!(h.st.bar_shown(), "the open menu keeps the bar");
 }
 
 /// Inventory dragged with an IM shown (#627): its messages fade behind
@@ -1807,6 +2564,53 @@ fn inventory_drops_give_to_the_resident_in_every_conversation_style() {
                 assert!(!egui::DragAndDrop::has_any_payload(&h.frames.ctx));
                 assert_eq!(h.st.drafts[&Some(JANE)], draft);
             }
+        }
+    }
+}
+
+/// A landmark dragged from Places (or a favorite) is the inventory item of
+/// that landmark: dropped on a resident's conversation it is given, as in the
+/// Legacy Viewer (#4241). A place with no item (history, parcel) is not.
+#[test]
+fn a_landmark_dragged_from_places_gives_to_the_resident() {
+    use crate::ui::places::drag::{PlaceDrag, Target};
+    const ITEM: Uuid = Uuid::from_u128(0x1A4);
+    let place = |target| PlaceDrag {
+        target,
+        favorite: None,
+        name: "A place".into(),
+        thumbnail: None,
+    };
+    let button = |pos, pressed| egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: Default::default(),
+    };
+    for style in ALL {
+        let mut h = H::new(style);
+        h.open(Some(JANE));
+        let over = h.text_rect("hello from Jane").center();
+        let away = egui::pos2(4.0, 4.0);
+        for (target, gives) in [(Target::Landmark(ITEM), true), (Target::Parcel(ITEM), false)] {
+            h.take();
+            h.frame(vec![egui::Event::PointerMoved(away), button(away, true)]);
+            egui::DragAndDrop::set_payload(&h.frames.ctx, place(target));
+            assert_eq!(crate::ui::inventory::drag::give_count(&h.frames.ctx), gives.then_some(1));
+            assert_eq!(crate::ui::inventory::drag::carried_count(&h.frames.ctx), None);
+            h.frame(vec![egui::Event::PointerMoved(over)]);
+            h.frame(vec![button(over, false)]);
+            h.settle();
+            let actions = h.take();
+            assert_eq!(
+                has(
+                    &actions,
+                    |a| matches!(a, ConvAction::GiveItems { to, items } if *to == JANE && *items == [ITEM])
+                ),
+                gives,
+                "{style:?}: {target:?}"
+            );
+            egui::DragAndDrop::clear_payload(&h.frames.ctx);
         }
     }
 }
@@ -1976,7 +2780,11 @@ fn invitations_are_answered() {
 fn a_group_chat_snoozes_from_its_head_and_its_menu() {
     for style in ALL {
         let mut h = H::new(style);
-        h.world.groups.sessions.entry(GROUP).or_default().group = true;
+        let session = h.world.groups.sessions.entry(GROUP).or_default();
+        session.group = true;
+        // A name of its own: the unnamed fallback (Japanese 会話) is also the
+        // window's title and a section head.
+        session.name = "Builders".to_owned();
         let button = if style.workspace() {
             control_id("head-alarm-snooze-filled")
         } else {
@@ -2052,6 +2860,18 @@ fn the_window_of_tabs_still_acts() {
             has(&h.take(), |a| matches!(a, ConvAction::Close(id) if *id == BOB)),
             "{style:?}: close"
         );
+        // its neighbour in the list shows next (#4373)
+        let order = if style.workspace() {
+            super::sidebar::tab_order(&h.world, &h.st)
+        } else {
+            super::keys::legacy_order(&h.world, &h.st)
+        };
+        let next = super::keys::after_close(&order, BOB);
+        assert!(next.is_some() && next != Some(BOB), "{style:?}: a conversation beside Bob");
+        assert_eq!(h.st.selected, next, "{style:?}: the neighbour shown");
+        // the harness keeps the closed conversation: back to Bob's
+        h.st.selected = Some(BOB);
+        h.settle();
         h.press(classic_id("phone-filled"));
         assert!(
             has(&h.take(), |a| matches!(a, ConvAction::Call(id) if *id == BOB)),
@@ -2190,12 +3010,17 @@ fn ooc_shortcut_always_uses_normal_volume() {
         for volume in [Volume::Whisper, Volume::Say, Volume::Shout] {
             for detached in [false, true] {
                 let mut h = H::new(style);
+                // the settings' default: the nearby field keeps the keyboard
+                // after a message, for the second line
+                h.st.keep_focus = true;
                 h.open(None);
                 if detached {
                     h.st.pop_out(None);
                     h.st.conv_focus_request = true;
                     h.settle();
                 }
+                // This test types twice without clicking the field again.
+                h.st.keep_focus = true;
                 h.st.volume = volume;
                 h.type_text("brb");
                 h.history_key(egui::Key::Enter, egui::Modifiers::ALT);
@@ -2205,6 +3030,11 @@ fn ooc_shortcut_always_uses_normal_volume() {
                     "{style:?}, {volume:?}, detached={detached}: normal OOC"
                 );
                 assert_eq!(h.st.volume, volume);
+                let field = egui::Id::unique(("conv_input", None::<Uuid>));
+                assert!(
+                    h.frames.ctx.memory(|m| m.has_focus(field)),
+                    "{style:?}, detached={detached}: ready for the next message"
+                );
                 h.type_text("ordinary");
                 h.history_key(egui::Key::Enter, egui::Modifiers::NONE);
                 let expected = match (style.workspace(), volume) {
@@ -2258,7 +3088,9 @@ fn ooc_shortcut_uses_the_enter_events_modifiers() {
 }
 
 /// The bar/island shares event classification with conversations. Wrapping
-/// comes before channel parsing, and Ctrl/Shift retain their event's volume.
+/// comes before channel parsing; with no Shout key (the default) Ctrl+Enter
+/// sends at the selected volume (Shift+Enter is the line break:
+/// `paragraph_chord_edits_…`).
 #[test]
 fn ooc_shortcut_keeps_bar_channel_focus_and_event_volume() {
     use aurora_net::ChatType as C;
@@ -2267,8 +3099,7 @@ fn ooc_shortcut_keeps_bar_channel_focus_and_event_volume() {
         (M::ALT, M::NONE, Some((0, "(( /5 brb ))", C::Normal))),
         (M::CTRL | M::ALT, M::ALT, None),
         (M::SHIFT | M::ALT, M::ALT, None),
-        (M::CTRL, M::NONE, Some((5, "brb", C::Shout))),
-        (M::SHIFT, M::NONE, Some((5, "brb", C::Whisper))),
+        (M::CTRL, M::NONE, Some((5, "brb", C::Normal))),
     ];
     for (pressed, after, expected) in cases {
         let mut h = H::new(ChatStyle::Aurora);
@@ -2290,6 +3121,95 @@ fn ooc_shortcut_keeps_bar_channel_focus_and_event_volume() {
             assert_eq!(h.st.input, "/5 brb");
         } else {
             assert!(h.st.input.is_empty());
+        }
+    }
+}
+
+/// An emote's sender is clickable like a header's name in every style
+/// (#4757): clicking the name in "/me waves" opens their profile.
+#[test]
+fn an_emotes_sender_opens_their_profile_in_every_style() {
+    for style in ALL {
+        let mut h = H::new(style);
+        h.world
+            .conversation_line(GROUP, line("Jane", JANE, ChatKind::Im, "/me waves at everyone"));
+        h.open(Some(GROUP));
+        h.settle();
+        // the conversation's line, not the sidebar's preview of it
+        let body = h
+            .texts
+            .iter()
+            .rfind(|t| t.rect.left() > 150.0 && t.source.ends_with("waves at everyone"))
+            .unwrap_or_else(|| {
+                panic!(
+                    "{style:?}: the emote's action is painted: {:?}",
+                    h.texts.iter().map(|t| &t.source).collect::<Vec<_>>()
+                )
+            });
+        // the sender's name, drawn on the action's own line
+        let name = h
+            .texts
+            .iter()
+            .filter(|t| t.source == "Jane")
+            .min_by(|a, b| {
+                (a.rect.center().y - body.rect.center().y)
+                    .abs()
+                    .total_cmp(&(b.rect.center().y - body.rect.center().y).abs())
+            })
+            .filter(|t| (t.rect.center().y - body.rect.center().y).abs() <= 3.0);
+        assert!(name.is_some(), "{style:?}: the emote's sender sits on its line");
+        let at = name.map_or(egui::pos2(body.rect.left() + 4.0, body.rect.center().y), |t| t.rect.center());
+        h.at(at);
+        assert_eq!(
+            crate::ui::profile::take_open_request(&h.frames.ctx),
+            Some(JANE),
+            "{style:?}: clicking the emote's sender opens the profile"
+        );
+    }
+}
+
+/// The emote's sender leads where its header's name does and no further.
+/// In the nearby chat the profile is asked for as the world names people,
+/// the scope `@shownames` rules (`ProfileUi::open_in` refuses a resident it
+/// hides, as for the header's name); an object's emote asks for no profile.
+#[test]
+fn an_emotes_sender_follows_its_headers_link_in_the_nearby_chat() {
+    const THING: Uuid = Uuid::from_u128(0x0b1ec7);
+    for style in ALL {
+        for (from, source, kind) in [
+            ("Jane", JANE, ChatKind::Local(aurora_net::ChatType::Normal)),
+            ("Worn Thing", THING, ChatKind::Object(aurora_net::ChatType::Normal)),
+        ] {
+            let mut h = H::new(style);
+            h.world.chat.push_back(line(from, source, kind, "/me waves at everyone"));
+            h.open(None);
+            h.settle();
+            let body = h
+                .texts
+                .iter()
+                .rfind(|t| t.rect.left() > 150.0 && t.source.ends_with("waves at everyone"))
+                .unwrap_or_else(|| panic!("{style:?} {from}: the emote's action is painted"))
+                .rect;
+            // the name before the action, on its line (the action's rows
+            // start at the line's left, as the name does)
+            let name = h
+                .texts
+                .iter()
+                .filter(|t| t.source == from && (t.rect.center().y - body.center().y).abs() <= 3.0 && t.rect.left() <= body.left())
+                .max_by(|a, b| a.rect.left().total_cmp(&b.rect.left()))
+                .unwrap_or_else(|| panic!("{style:?} {from}: the emote's sender sits on its line"))
+                .rect;
+            h.at(name.center());
+            let asked = crate::ui::profile::take_open_request_in(&h.frames.ctx);
+            if source == JANE {
+                assert_eq!(
+                    asked,
+                    Some((crate::world::names::NameScope::World, JANE)),
+                    "{style:?}: the nearby chat asks as the world names people"
+                );
+            } else {
+                assert_eq!(asked, None, "{style:?}: an object has no profile");
+            }
         }
     }
 }

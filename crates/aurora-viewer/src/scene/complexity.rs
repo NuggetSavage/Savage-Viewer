@@ -108,6 +108,12 @@ pub fn radius_weighted_tris(lod_bytes: [u32; 4], radius: f32) -> f32 {
 /// Shapes kept by `Scene::prim_triangle_counts` (then it starts over).
 const PRIM_TRIANGLES_CACHED: usize = 16384;
 
+/// A HUD attachment point (31..=38): drawn on the screen, never counted in
+/// the complexity.
+pub fn is_hud_point(point: u8) -> bool {
+    (31..=38).contains(&point)
+}
+
 /// What decides which avatars show as grey silhouettes.
 pub struct Rules<'a> {
     /// RenderAvatarMaxComplexity (0 = no limit).
@@ -291,26 +297,44 @@ impl Scene {
             }
         }
         for &att in world.objects.children_of(&av.key) {
-            let Some(root) = world.objects.get(att) else {
+            // (nor the copies drawn from the cache, world/avatar_cache: the
+            // region's objects count once they come)
+            let Some(root) = world.objects.get(att).filter(|o| !o.is_client_preview()) else {
                 continue;
             };
             // HUD attachments (points 31..=38) do not count
-            if (31..=38).contains(&root.attachment_point()) {
+            if is_hud_point(root.attachment_point()) {
                 continue;
             }
-            let mut textures = HashSet::new();
-            let mut total = self.prim_render_cost(world, att, &mut textures);
-            area += self.prim_scaled_area(world, att);
-            for &c in world.objects.children_of(&root.key) {
-                total += self.prim_render_cost(world, c, &mut textures);
-                area += self.prim_scaled_area(world, c);
-            }
-            for t in &textures {
-                total += texture_cost(self.textures.full_size(t)) as f32;
-            }
-            cost += total.clamp(0.0, MAX_ATTACHMENT_COMPLEXITY) as u32;
+            let (c, a) = self.attachment_complexity(world, att);
+            cost += c;
+            area += a;
         }
         (cost, area)
+    }
+
+    /// One worn object's share of its avatar's complexity, the root at
+    /// `att` and its linked prims with their textures counted once
+    /// (accountRenderComplexityForObject, capped at
+    /// MAX_ATTACHMENT_COMPLEXITY), and its scaled surface area. The
+    /// Performance window lists it per attachment, as the Legacy Viewer's
+    /// panel_performance_complexity (its ARC column, from
+    /// LLAvatarRenderNotifier::getObjectComplexityList).
+    pub fn attachment_complexity(&self, world: &World, att: usize) -> (u32, f32) {
+        let Some(root) = world.objects.get(att) else {
+            return (0, 0.0);
+        };
+        let mut textures = HashSet::new();
+        let mut total = self.prim_render_cost(world, att, &mut textures);
+        let mut area = self.prim_scaled_area(world, att);
+        for &c in world.objects.children_of(&root.key) {
+            total += self.prim_render_cost(world, c, &mut textures);
+            area += self.prim_scaled_area(world, c);
+        }
+        for t in &textures {
+            total += texture_cost(self.textures.known_size(t)) as f32;
+        }
+        (total.clamp(0.0, MAX_ATTACHMENT_COMPLEXITY) as u32, area)
     }
 
     /// Refresh every avatar's complexity (every 2 s, at once when a rule
@@ -362,7 +386,9 @@ impl Scene {
             let (c, area) = self.avatar_complexity(world, idx);
             self.avatar_complexity.insert(id, c);
             self.avatar_area.insert(id, area);
-            if rules.too_complex(&id, id == world.agent_id, c, area) {
+            // (our copies, the animation editor's mirror and the Fit lab's
+            // mannequins, are drawn as we are)
+            if rules.too_complex(&id, id == world.agent_id || world.is_local_copy(&id), c, area) {
                 self.too_complex.insert(idx);
             } else {
                 self.too_complex.remove(&idx);
@@ -389,7 +415,7 @@ impl Scene {
             } else if self.rlva_silhouettes.contains(&idx) {
                 let complexity = self.avatar_complexity.get(&object.full_id).copied().unwrap_or_default();
                 let area = self.avatar_area.get(&object.full_id).copied().unwrap_or_default();
-                if !rules.too_complex(&object.full_id, false, complexity, area) {
+                if !rules.too_complex(&object.full_id, world.is_local_copy(&object.full_id), complexity, area) {
                     self.too_complex.remove(&idx);
                 }
             }

@@ -8,6 +8,40 @@ use aurora_net::inventory::upload::{Prices, Receipt};
 const SOUND_PREVIEW: u64 = u64::MAX - 10;
 
 impl App {
+    /// A file uploaded, as the upload callback of LLViewerAssetUpload says it
+    /// (indra/newview/llviewerassetupload.cpp): the UploadPayment toast for
+    /// what it cost, under "Show upload payments" (FSShowUploadPaymentToast,
+    /// on by default), then the
+    /// inventory opened on the new item (openInventoryPanelAndSetSelection),
+    /// never past @showinv. The L$ spent sound is the balance's, past
+    /// UISndMoneyChangeThreshold, as there: the balance is asked again after
+    /// every upload.
+    pub(super) fn show_uploaded(&mut self, id: uuid::Uuid, cost: i32) {
+        if cost > 0 && self.settings.imports.show_payment {
+            self.world.notifications.push(
+                crate::world::notifications::Kind::Info,
+                aurora_i18n::tr!("import-upload-payment-title"),
+                aurora_i18n::tr!("import-upload-payment", cost = cost),
+                crate::world::notifications::Data::None,
+            );
+        }
+        let shown = self.panels.inventory && !ui::widgets::floater_minimized(&self.egui_ctx, "inventory");
+        self.inventory_ui.show_uploaded(&self.world.inventory, id, shown);
+        if !self.world.rlva.has("showinv") {
+            ui::widgets::open_floater(&self.egui_ctx, "inventory", &mut self.panels.inventory);
+        }
+    }
+
+    /// The upload prices: the grid's, or the demo server's.
+    fn import_prices(&self) -> Prices {
+        let prices = if self.demo {
+            self.imports.demo_prices()
+        } else {
+            self.world.login.as_ref().map(|l| Prices::from_login(&l.raw)).unwrap_or_default()
+        };
+        prices.with_fallback(self.world.upload_cost)
+    }
+
     pub(super) fn show_imports(&mut self, ctx: &egui::Context, palette: &Palette) {
         if self.demo && !self.imports.demo_started {
             // keep a scenario's own balance (AURORA_DEMO_ACTIONS sets one)
@@ -66,6 +100,7 @@ impl App {
         }
         self.imports.poll_local_registry();
         self.sync_local_picker_bindings();
+        self.imports.sync_attachment_targets(&self.world);
         let expired = self.imports.expire_local_appearances(&mut self.world.objects);
         self.build
             .forget_expired_local_picker_appearances(&expired, &self.imports.local_appearance_targets);
@@ -90,6 +125,9 @@ impl App {
             self.send(NetCommand::DiscardMeshQuote(token));
         }
         let commands = self.imports.poll(ctx, &self.scene.jobs, &self.world, &self.settings.inventory);
+        let prices = self.import_prices();
+        self.imports
+            .advance_quick(ctx, &self.world, &self.settings.inventory, &self.settings.imports, &prices);
         self.save_import_animation_models();
         for command in commands {
             self.send(command);
@@ -152,12 +190,7 @@ impl App {
                     self.settings.imports.permissions_for(aurora_net::inventory::upload::Kind::Mesh),
                 );
             }
-            let prices = Prices {
-                texture: Some(10),
-                large_texture: Some(40),
-                sound: Some(10),
-                animation: Some(10),
-            };
+            let prices = self.imports.demo_prices();
             if self.imports.total(&prices).is_some() {
                 self.imports.demo_upload_started = true;
                 self.imports
@@ -213,7 +246,12 @@ impl App {
             && let Some(index) = self.world.objects.index_of_uuid(&crate::demo::action_id(970))
             && let Some(object) = self.world.objects.get(index)
         {
-            let mesh = entry.local_mesh_ids.first().copied();
+            let mesh = self
+                .imports
+                .local_targets
+                .get(&object.full_id)
+                .and_then(|target| target.mesh(entry))
+                .map(|mesh| mesh.0);
             let matches_mesh = |key| matches!(key, Some(crate::scene::GeomKey::Mesh { id, .. }) if Some(id) == mesh);
             let gpu = self.scene.gpu.get(index);
             let texture = gpu.is_some_and(|gpu| gpu.faces.iter().any(|face| face.tex_id == entry.id));
@@ -431,22 +469,24 @@ impl App {
                     } else {
                         self.imports.choice
                     };
-                    let prices = if self.demo {
-                        Prices {
-                            texture: Some(10),
-                            large_texture: Some(40),
-                            sound: Some(10),
-                            animation: Some(10),
-                        }
-                    } else {
-                        self.world.login.as_ref().map(|l| Prices::from_login(&l.raw)).unwrap_or_default()
-                    };
-                    let prices = prices.with_fallback(self.world.upload_cost);
+                    let prices = self.import_prices();
                     self.imports.with_choice(choice, |imports| {
                         imports.start_confirmed(&self.world, &self.settings.inventory, &self.settings.imports, &prices);
                     });
                 }
                 Action::Cancel => self.imports.cancel_remaining(),
+                Action::Quick(answer) => {
+                    let prices = self.import_prices();
+                    self.imports.answer_quick(
+                        answer,
+                        ctx,
+                        &self.scene.jobs,
+                        &self.world,
+                        &self.settings.inventory,
+                        &self.settings.imports,
+                        &prices,
+                    );
+                }
                 Action::Preview(id) => {
                     if self
                         .imports
@@ -571,6 +611,9 @@ impl App {
                         .into_iter()
                         .filter_map(|index| self.world.objects.get(index))
                         .filter(|object| object.pcode == aurora_prim::params::LL_PCODE_VOLUME)
+                        // an empty list is the whole object, a prim kept selected
+                        // with no face takes nothing
+                        .filter(|object| self.build.faces.get(&object.key).is_none_or(|faces| !faces.is_empty()))
                         .map(|object| (object.full_id, self.build.faces.get(&object.key).cloned().unwrap_or_default()))
                         .collect();
                     if targets.is_empty() {
@@ -676,13 +719,16 @@ impl App {
                         .collect();
                     self.imports.clear_appearance_targets(&mut self.world.objects, &targets, Some(id));
                     self.build.forget_local_picker_asset(id);
+                    self.texture_library.forget_local_asset(id);
                     if let Some(index) = self.imports.entries.iter().position(|e| e.id == id) {
                         let mut entry = self.imports.entries.remove(index);
                         if let Some(Source::Mesh(draft)) = &mut entry.source {
                             draft.invalidate();
                             self.imports.discarded_quotes.append(&mut draft.discarded_quotes);
                         }
-                        self.world.local_assets.remove(&id);
+                        if let Some((_, false)) = self.world.local_assets.remove(&id) {
+                            self.wearable_ui.preview.forget_local_texture(id);
+                        }
                         self.ui_images.remove(&id);
                         if entry.local_published {
                             self.scene.materials.remove_local(&id);
@@ -705,7 +751,10 @@ impl App {
                     self.imports.open_map_picker(id, slot);
                 }
                 Action::MapDrop(id, slot, target) => {
-                    if let Some(resource) = target.receive(ctx, palette, &self.world.inventory, |_| true) {
+                    let god = self.world.god_level > 0;
+                    if let Some(resource) = target.receive(ctx, palette, &self.world.inventory, |item| {
+                        crate::ui::texture_library::map_source(&self.world.inventory, item, god)
+                    }) {
                         self.imports.drop_map(id, slot, resource.asset);
                     }
                 }
@@ -795,6 +844,9 @@ impl App {
         }
         self.imports.save_local_registry(false);
         self.show_local_appearance_status(ctx, palette);
+        if self.avatar_studio.active && self.avatar_studio.animation_editor && !self.imports.any_window_open() {
+            self.ik_editor.resume_after_upload(&self.world);
+        }
     }
 
     fn show_local_appearance_status(&mut self, ctx: &egui::Context, palette: &Palette) {
@@ -819,6 +871,17 @@ impl App {
         let Ok(mode) = std::env::var("AURORA_DEMO_LOCAL_APPEARANCES") else {
             return;
         };
+        if mode == "deleted"
+            && self.frame_count == 700
+            && let Some(index) = self.world.objects.index_of_uuid(&crate::demo::action_id(970))
+            && let Some(object) = self.world.objects.get(index)
+        {
+            let event = aurora_net::NetEvent::ObjectsKilled {
+                handle: object.key.region,
+                local_ids: vec![object.key.local_id],
+            };
+            self.world.apply(event);
+        }
         if self.frame_count == 600 {
             self.imports.open = false;
             self.panels.people = false;
@@ -832,8 +895,8 @@ impl App {
             }
         }
         let (key, start) = match self.frame_count {
-            650..=651 if !matches!(mode.as_str(), "1" | "reveal") => ("local_appearance_warning_rect", 650),
-            680..=681 if mode == "reveal" => ("local_appearance_reveal_rect", 680),
+            650..=651 if !matches!(mode.as_str(), "1" | "reveal" | "deleted") => ("local_appearance_warning_rect", 650),
+            680..=681 if matches!(mode.as_str(), "reveal" | "deleted") => ("local_appearance_reveal_rect", 680),
             850..=851 if mode == "reveal" => ("local_appearance_reveal_rect", 850),
             680..=681 if matches!(mode.as_str(), "confirm" | "remove" | "cancel") => ("local_appearance_remove_rect", 680),
             710..=711 if mode == "remove" => ("local_appearance_confirm_rect", 710),
@@ -950,13 +1013,13 @@ impl App {
             let Some(entry) = self.imports.entries.iter().find(|e| e.id == target.entry) else {
                 continue;
             };
-            let Some(asset) = entry.local_mesh_ids.get(target.model).copied() else {
+            let Some((asset, fit)) = target.mesh(entry) else {
                 if !entry.local_mesh_ids.is_empty() {
                     invalid.push(*id);
                 }
                 continue;
             };
-            let scale = if target.use_scale {
+            let scale = if target.use_scale && !target.scene {
                 if let Some(Source::Mesh(draft)) = &entry.source {
                     draft
                         .scene
@@ -981,6 +1044,7 @@ impl App {
                     .and_then(|v| v.sculpt)
                     .is_some_and(|s| s.texture == asset)
                     && object.render.local_scale == scale
+                    && object.render.local_fit == fit
             }) {
                 continue;
             }
@@ -992,10 +1056,11 @@ impl App {
             });
             object.render.local_volume = Some(Box::new(volume));
             object.render.local_scale = scale;
+            object.render.local_fit = fit;
             object.shape_dirty = true;
             object.render.needs_records = true;
             // counted again from the local mesh (face stepping, texturing)
-            self.build.face_counts.remove(id);
+            self.build.forget_face_count(id);
         }
         self.clear_local_mesh_targets(&invalid);
     }
@@ -1007,10 +1072,11 @@ impl App {
             {
                 object.render.local_volume = None;
                 object.render.local_scale = None;
+                object.render.local_fit = None;
                 object.shape_dirty = true;
                 object.render.needs_records = true;
             }
-            self.build.face_counts.remove(id);
+            self.build.forget_face_count(id);
         }
     }
     pub(super) fn apply_local_imports(&mut self, renderer: &mut aurora_render::Renderer) {
@@ -1093,13 +1159,25 @@ impl App {
                 }
                 entry.local_published = true;
                 entry.local_generation = prepared.generation;
+                self.egui_ctx.request_repaint();
             } else {
                 entry.local_failed_generation = Some(prepared.generation);
                 self.imports.message = aurora_i18n::tr!("import-local-staging-busy").into();
             }
             entry.local_pending = false;
         }
+        self.world.local_asset_order = self
+            .imports
+            .entries
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| entry.local)
+            .map(|(order, entry)| (entry.id, order))
+            .collect();
         self.imports.local_uploads = pending;
+        if !self.imports.local_uploads.is_empty() {
+            self.egui_ctx.request_repaint_after(Duration::from_millis(33));
+        }
         let referenced: std::collections::HashSet<_> = self.imports.entries.iter().flat_map(|e| e.local_slots.keys().copied()).collect();
         for (asset, slot) in previous_slots {
             if !referenced.contains(&asset) {
@@ -1154,12 +1232,20 @@ impl App {
     }
 
     pub(super) fn sync_local_picker_bindings(&mut self) {
+        self.imports.sync_local_duplicate_bindings(&mut self.world.objects);
         self.imports
             .sync_local_appearance_changes(self.build.local_appearance_changes.drain(..));
     }
 
     pub(super) fn demo_asset_upload(&mut self, request: uuid::Uuid, upload: aurora_net::inventory::upload::Request) {
-        let result = upload.body().map(|_| {
+        // `bulk-failed`: the first upload gets no usable answer, as after an HTTP 500
+        let fails = self.imports.demo_mode == "bulk-failed" && !std::mem::replace(&mut self.imports.demo_upload_failed, true);
+        let body = if fails {
+            Err(aurora_net::inventory::upload::Error::Unknown)
+        } else {
+            upload.body()
+        };
+        let result = body.map(|_| {
             let item = aurora_net::inventory::InvItem {
                 id: uuid::Uuid::new_v4(),
                 asset_id: uuid::Uuid::new_v4(),

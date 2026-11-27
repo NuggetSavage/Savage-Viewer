@@ -5,6 +5,9 @@ use crate::{
     world::bridge::{LockMode, Preferences},
 };
 
+/// The window id of MoveLock Options.
+pub const WINDOW: &str = "movelock";
+
 #[derive(Default)]
 pub struct MoveLockUi {
     pub open: bool,
@@ -23,7 +26,7 @@ impl MoveLockUi {
         let before = *prefs;
         let mut repair = false;
         Floater::new(
-            "movelock",
+            WINDOW,
             aurora_i18n::tr!("movelock-title"),
             egui::pos2(460.0, 180.0),
             egui::vec2(470.0, 420.0),
@@ -96,7 +99,8 @@ impl MoveLockUi {
                         .on_hover_text(status)
                         .clicked()
                     {
-                        self.open = true;
+                        // shown again, its minimized options expand
+                        widgets::open_floater(ui.ctx(), WINDOW, &mut self.open);
                     }
                 });
             });
@@ -218,7 +222,9 @@ mod tests {
             let rect = ctx
                 .data(|d| d.get_temp::<egui::Rect>(egui::Id::unique(("movelock_control", index))))
                 .expect("control rectangle");
-            let pos = rect.center();
+            // The control's own glyph, at its left: a short label (Japanese)
+            // leaves the centre in the gap between the switch and its label.
+            let pos = rect.left_center() + egui::vec2(6.0, 0.0);
             let click = |pressed| egui::Event::PointerButton {
                 pos,
                 button: egui::PointerButton::Primary,

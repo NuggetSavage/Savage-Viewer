@@ -33,6 +33,10 @@ pub struct MoveInput {
     pub up: bool,
     pub down: bool,
     pub run: bool,
+    /// Stop moving held (Space): the simulator brakes the avatar, on the
+    /// ground and in the air (stop_moving -> AGENT_CONTROL_STOP,
+    /// indra/newview/llviewerinput.cpp).
+    pub stop: bool,
     /// First moments of a key press: small "nudge" steps (LLAgent::moveAtNudge).
     pub nudge_fb: bool,
     pub nudge_lr: bool,
@@ -45,6 +49,19 @@ pub struct MoveInput {
 }
 
 impl MoveInput {
+    pub(crate) fn keyboard_yaw(&self) -> f32 {
+        (i32::from(self.turn_left) - i32::from(self.turn_right)) as f32 * TURN_RATE * yaw_rate(self.turn_held)
+    }
+
+    pub(crate) fn vr_lateral_keys(&mut self, mouse_look: bool) {
+        let left = self.turn_left || self.strafe_left;
+        let right = self.turn_right || self.strafe_right;
+        self.turn_left = left && !mouse_look;
+        self.turn_right = right && !mouse_look;
+        self.strafe_left = left && mouse_look;
+        self.strafe_right = right && mouse_look;
+    }
+
     /// LLAgent::moveAt/moveLeft/moveUp/moveYaw (indra/newview/llagent.cpp):
     /// movement returns the camera to the avatar, except latched crouching.
     pub fn resets_camera(&self, crouch_latched: bool) -> bool {
@@ -61,6 +78,16 @@ impl MoveInput {
     }
 }
 
+/// The avatar's pitch within the Legacy Viewer's limits (LLAgent::pitch,
+/// indra/newview/llagent.cpp): down to 179° from straight up, 89° below the
+/// horizon, and up to 5° from it, 85° above. Positive looks up.
+pub const PITCH_DOWN_LIMIT: f32 = 89.0 * std::f32::consts::PI / 180.0;
+pub const PITCH_UP_LIMIT: f32 = 85.0 * std::f32::consts::PI / 180.0;
+
+pub fn clamp_pitch(pitch: f32) -> f32 {
+    pitch.clamp(-PITCH_DOWN_LIMIT, PITCH_UP_LIMIT)
+}
+
 #[derive(Debug, Clone)]
 pub struct AgentState {
     /// Render-space position (main-region local).
@@ -68,6 +95,10 @@ pub struct AgentState {
     pub velocity: Vec3,
     pub yaw: f32,
     pub pitch: f32,
+    /// A script took yaw left or right outright (LLAgent::rotateGrabbed,
+    /// indra/newview/llagent.cpp): [`Self::yaw_by`] leaves the heading
+    /// alone. Mirrors `World::script_controls`, which sets it.
+    pub rotate_grabbed: bool,
     pub flying: bool,
     pub seated: bool,
     /// Sitting on the ground: ANIM_AGENT_SIT_GROUND_CONSTRAINED plays on us
@@ -138,6 +169,7 @@ impl Default for AgentState {
             velocity: Vec3::ZERO,
             yaw: 0.0,
             pitch: 0.0,
+            rotate_grabbed: false,
             flying: false,
             seated: false,
             ground_sit: false,
@@ -216,6 +248,13 @@ impl AgentState {
     }
 
     /// LLAgent::isSitting: on an object or on the ground.
+    /// Flying in mouselook, not seated: the region moves the avatar along
+    /// the camera's pitch, which the body rotation carries (LLToolGun calls
+    /// gAgent.pitch); walking, the region keeps it on the ground.
+    pub fn follows_camera_pitch(&self, mouselook: bool) -> bool {
+        mouselook && self.flying && !self.is_sitting()
+    }
+
     pub fn is_sitting(&self) -> bool {
         self.seated || self.ground_sit
     }
@@ -587,8 +626,14 @@ impl AgentState {
             return;
         }
         let dt = dt.min(0.1);
-        let fwd = self.forward();
-        let left = Vec3::new(-fwd.y, fwd.x, 0.0);
+        let use_mouselook_pitch = self.follows_camera_pitch(mouselook);
+        let fwd = if use_mouselook_pitch {
+            (self.body_rotation() * Quat::from_rotation_y(-self.pitch)) * Vec3::X
+        } else {
+            self.forward()
+        };
+        // from the heading alone: a pitch about this axis leaves it whole
+        let left = Vec3::new(-self.yaw.sin(), self.yaw.cos(), 0.0);
         let mut dir = Vec3::ZERO;
         if input.forward {
             dir += fwd;
@@ -616,19 +661,25 @@ impl AgentState {
         } else {
             1.0
         };
-        let mut horiz = dir.normalize_or_zero() * speed * nudge;
+        // Stop moving: a stand-in for the simulator's brake, slow enough to
+        // see in the demo (not its measured deceleration)
+        let brake = if input.stop { 0.25 } else { 1.0 };
+        let mut horiz = dir.normalize_or_zero() * speed * nudge * brake;
+        let pitched_flight = if use_mouselook_pitch { horiz.z } else { 0.0 };
+        horiz = horiz.with_z(0.0);
         let floor = ground.map(|g| g + STAND);
         let mut pos = self.server_pos;
         let mut vz = self.server_vel.z;
         let grounded = floor.is_some_and(|f| pos.z <= f + 0.05);
         if self.flying {
-            vz = if input.up {
+            let climb = if input.up {
                 4.0
             } else if input.down {
                 -4.0
             } else {
                 0.0
             };
+            vz = climb * brake + pitched_flight;
         } else if grounded {
             vz = if input.up { 5.0 } else { 0.0 };
         } else {
@@ -660,13 +711,32 @@ impl AgentState {
         self.has_server = true;
     }
 
-    /// Advance smoothing and turning.
+    /// LLAgent::yaw (indra/newview/llagent.cpp): turn the agent frame,
+    /// unless a script took yaw outright. The turns the Legacy Viewer makes
+    /// with LLAgent::rotate instead (the mouse in mouselook, the joystick in
+    /// mouselook without "mouselook yaw") add to `yaw` directly.
+    pub fn yaw_by(&mut self, radians: f32) {
+        if !self.rotate_grabbed {
+            self.yaw += radians;
+        }
+    }
+
+    /// Advance smoothing and turning. The yaw flags are sent whether or not
+    /// a script took yaw (`control_flags`).
     pub fn update(&mut self, input: &MoveInput, mouselook: bool, dt: f32, camera_distance: f32) {
-        self.yaw += input.joystick_yaw * dt.clamp(0.0, 0.2);
-        self.pitch = (self.pitch + input.joystick_pitch * dt.clamp(0.0, 0.2)).clamp(-1.55, 1.55);
-        if !mouselook && input.turn_left != input.turn_right {
-            let step = TURN_RATE * yaw_rate(input.turn_held) * dt;
-            self.yaw += if input.turn_left { step } else { -step };
+        // LLViewerJoystick::agentYaw: "Cannot steer some vehicles in
+        // mouselook if the script grabs the controls", so in mouselook
+        // without mouselook yaw the stick rotates the frame (no YAW flag);
+        // otherwise it goes through LLAgent::yaw.
+        let stick = input.joystick_yaw * dt.clamp(0.0, 0.2);
+        if mouselook && !input.joystick_mouselook_yaw {
+            self.yaw += stick;
+        } else {
+            self.yaw_by(stick);
+        }
+        self.pitch = clamp_pitch(self.pitch + input.joystick_pitch * dt.clamp(0.0, 0.2));
+        if !mouselook {
+            self.yaw_by(input.keyboard_yaw() * dt);
         }
         self.yaw = (self.yaw + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU) - std::f32::consts::PI;
         if !self.has_local_control() {
@@ -806,6 +876,11 @@ impl AgentState {
         if mouselook {
             f |= control::MOUSELOOK;
         }
+        // sent with the movement keys, not instead of them: the simulator
+        // brakes whatever they ask
+        if input.stop {
+            f |= control::STOP;
+        }
         f
     }
 
@@ -813,9 +888,15 @@ impl AgentState {
         let at = cam.forward();
         let left = cam.view_up().cross(at).normalize_or(Vec3::Y);
         let cam_up = at.cross(left).normalize_or(Vec3::Z);
+        // The Legacy Viewer sends the pitched frame rotation in mouselook; the drawn body stays yaw-only.
+        let body_rotation = if cam.mouselook() && !self.is_sitting() {
+            Quat::from_rotation_z(self.yaw) * Quat::from_rotation_y(-self.pitch)
+        } else {
+            self.body_rotation()
+        };
         AgentControls {
             control_flags: self.control_flags(input, cam.mouselook()),
-            body_rotation: self.body_rotation(),
+            body_rotation,
             head_rotation: cam.head_rotation(self),
             camera_center: cam.position,
             camera_at: at,
@@ -863,6 +944,81 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn vr_lateral_keys_switch_between_turn_and_strafe() {
+        let mut keys = MoveInput {
+            strafe_left: true,
+            turn_held: 1.0,
+            up: true,
+            ..Default::default()
+        };
+        keys.vr_lateral_keys(false);
+        assert!(keys.turn_left && !keys.strafe_left && keys.up);
+        assert_eq!(keys.keyboard_yaw(), TURN_RATE);
+        keys.vr_lateral_keys(true);
+        assert!(!keys.turn_left && keys.strafe_left && keys.up);
+        assert_eq!(keys.keyboard_yaw(), 0.0);
+    }
+
+    /// A script that took yaw outright leaves the heading where it is, for
+    /// the keys and for the joystick out of mouselook. The yaw flag is still
+    /// set (LLAgent::moveYaw keeps sending it).
+    #[test]
+    fn a_grabbed_turn_leaves_the_heading_and_still_sends_the_flag() {
+        let input = MoveInput {
+            turn_left: true,
+            turn_held: 1.0,
+            joystick_yaw: 0.4,
+            ..MoveInput::default()
+        };
+        let mut agent = AgentState {
+            rotate_grabbed: true,
+            ..AgentState::default()
+        };
+        let before = agent.yaw;
+        agent.update(&input, false, 0.1, 5.0);
+        assert_eq!(agent.yaw, before, "rotateGrabbed: the agent frame stays");
+        agent.yaw_by(0.3);
+        assert_eq!(agent.yaw, before, "LLAgent::yaw is blocked too");
+        assert_ne!(
+            agent.control_flags(&input, false) & control::YAW_POS,
+            0,
+            "the script still sees the key"
+        );
+        agent.rotate_grabbed = false;
+        agent.update(&input, false, 0.1, 5.0);
+        assert_ne!(agent.yaw, before, "not grabbed: left still turns");
+    }
+
+    /// LLViewerJoystick::agentYaw: in mouselook without "mouselook yaw" the
+    /// stick turns with LLAgent::rotate (no YAW flag, not blocked by a
+    /// script's hold); with it (the default for a gamepad and for Game
+    /// Control) it goes through LLAgent::yaw and the hold stops it.
+    #[test]
+    fn a_grabbed_yaw_still_lets_the_stick_turn_in_mouselook_without_mouselook_yaw() {
+        let mut input = MoveInput {
+            joystick_yaw: 0.4,
+            ..MoveInput::default()
+        };
+        let mut agent = AgentState {
+            rotate_grabbed: true,
+            ..AgentState::default()
+        };
+        agent.update(&input, true, 0.1, 5.0);
+        assert!((agent.yaw - 0.04).abs() < 1e-5, "rotate, not yaw: {}", agent.yaw);
+        assert_eq!(agent.control_flags(&input, true) & (control::YAW_POS | control::YAW_NEG), 0);
+
+        input.joystick_mouselook_yaw = true;
+        let before = agent.yaw;
+        agent.update(&input, true, 0.1, 5.0);
+        assert_eq!(agent.yaw, before, "mouselook yaw goes through LLAgent::yaw");
+        assert_ne!(agent.control_flags(&input, true) & control::YAW_POS, 0);
+        agent.rotate_grabbed = false;
+        agent.update(&input, true, 0.1, 5.0);
+        assert!(agent.yaw > before, "not grabbed: the stick turns");
+    }
+
     use std::time::Duration;
 
     fn moving(velocity: Vec3, acceleration: Vec3) -> (AgentState, Instant) {
@@ -900,6 +1056,26 @@ mod tests {
         assert_eq!(AgentState::quickjump_flags(walking, false), walking);
         assert_eq!(AgentState::quickjump_flags(walking, true), walking | control::FINISH_ANIM);
         assert_eq!(AgentState::quickjump_flags(0, true), control::FINISH_ANIM);
+    }
+
+    /// Stop moving adds STOP to whatever the other keys send, walking or
+    /// flying (stop_moving only sets AGENT_CONTROL_STOP).
+    #[test]
+    fn stop_moving_adds_the_brake_to_the_keys() {
+        let mut agent = AgentState::default();
+        let idle = MoveInput::default();
+        assert_eq!(agent.control_flags(&idle, false) & control::STOP, 0);
+        let braking = MoveInput {
+            stop: true,
+            forward: true,
+            ..Default::default()
+        };
+        let flags = agent.control_flags(&braking, false);
+        assert_ne!(flags & control::STOP, 0);
+        assert_ne!(flags & control::AT_POS, 0, "the keys still go out");
+        agent.flying = true;
+        let flags = agent.control_flags(&braking, false);
+        assert_eq!(flags & (control::STOP | control::FLY), control::STOP | control::FLY);
     }
 
     /// With automatic takeoff off the agent never flies from a held Up, and
@@ -973,6 +1149,81 @@ mod tests {
         assert_ne!(flags & control::LEFT_POS, 0);
         assert_ne!(flags & control::UP_POS, 0);
         assert_ne!(flags & control::FLY, 0);
+    }
+
+    #[test]
+    fn local_mouselook_flight_follows_pitch_while_walking_stays_level() {
+        let input = MoveInput {
+            forward: true,
+            ..Default::default()
+        };
+        // high above the ground, so that a dive is not held at the floor
+        for (pitch, rises) in [(0.55, true), (-0.55, false)] {
+            let mut flyer = AgentState {
+                flying: true,
+                pitch,
+                server_pos: Vec3::Z * 10.0,
+                ..Default::default()
+            };
+            flyer.simulate_locally(&input, true, Some(0.0), 0.1, false);
+            assert_eq!(flyer.server_pos.z > 10.0, rises, "pitch {pitch}");
+            assert!((flyer.server_pos.z - 10.0).abs() > 0.1, "pitch {pitch} moves height");
+        }
+
+        let mut walker = AgentState {
+            pitch: 0.55,
+            server_pos: Vec3::Z * 0.84,
+            ..Default::default()
+        };
+        walker.simulate_locally(&input, true, Some(0.0), 0.1, false);
+        assert_eq!(walker.server_pos.z, 0.84, "walking stays level in mouselook");
+    }
+
+    #[test]
+    fn pitch_stops_where_the_legacy_viewer_stops() {
+        assert!((clamp_pitch(-2.0).to_degrees() + 89.0).abs() < 1e-3, "89° down");
+        assert!((clamp_pitch(2.0).to_degrees() - 85.0).abs() < 1e-3, "85° up");
+        assert_eq!(clamp_pitch(-0.2), -0.2);
+    }
+
+    #[test]
+    fn pitched_flight_strafes_at_full_weight() {
+        // W + A at 70°: the region turns a unit left axis by the body
+        // rotation, so the sideways share is 1/√2 of the speed, not cos(70°)
+        let input = MoveInput {
+            forward: true,
+            strafe_left: true,
+            ..Default::default()
+        };
+        let mut flyer = AgentState {
+            flying: true,
+            pitch: 70f32.to_radians(),
+            server_pos: Vec3::Z * 50.0,
+            ..Default::default()
+        };
+        flyer.simulate_locally(&input, true, Some(0.0), 0.1, false);
+        let sideways = flyer.server_pos.y / (10.0 * 0.1);
+        assert!(
+            (sideways - std::f32::consts::FRAC_1_SQRT_2).abs() < 0.02,
+            "sideways share {sideways}"
+        );
+    }
+
+    #[test]
+    fn only_flight_in_mouselook_follows_the_camera_pitch() {
+        let flyer = AgentState {
+            flying: true,
+            ..Default::default()
+        };
+        assert!(flyer.follows_camera_pitch(true));
+        assert!(!flyer.follows_camera_pitch(false), "third person");
+        assert!(!AgentState::default().follows_camera_pitch(true), "walking");
+        let seated = AgentState {
+            flying: true,
+            seated: true,
+            ..Default::default()
+        };
+        assert!(!seated.follows_camera_pitch(true), "seated");
     }
 
     #[test]

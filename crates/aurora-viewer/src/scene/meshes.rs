@@ -226,6 +226,20 @@ pub struct MeshArrival {
     truncated: bool,
 }
 
+impl MeshArrival {
+    /// Not a mesh, for `why`: no bytes kept, the entry takes the failure
+    /// path of an invalid asset (`MeshStreamer::keep`).
+    fn invalid(why: &str) -> Self {
+        MeshArrival {
+            bytes: MeshBytes::default(),
+            header: None,
+            skin: None,
+            invalid: Some(why.to_owned()),
+            truncated: false,
+        }
+    }
+}
+
 /// Parse what `bytes` holds: the header when they start the asset and it is
 /// not known yet (`header`), the skin when wanted and held.
 fn arrival(bytes: MeshBytes, header: Option<MeshHeader>, want_skin: bool) -> MeshArrival {
@@ -326,6 +340,17 @@ pub struct MeshStreamer {
 }
 
 impl MeshStreamer {
+    /// At exit: lets go of the loaded meshes without freeing them, as the
+    /// system takes the memory back when the process ends (`ObjectStore::
+    /// leak_at_exit`; the mesh data were most of the 29-34 s of #2894 and
+    /// #3134). The entries save nothing when dropped: the cache files are
+    /// written as the meshes arrive.
+    pub(crate) fn leak_at_exit(&mut self) {
+        std::mem::forget(std::mem::take(&mut self.entries));
+        std::mem::forget(std::mem::take(&mut self.by_key));
+        self.todo.clear();
+    }
+
     /// `cache_dir` empty: no disk cache (tests, which run in the crate's
     /// folder: a relative `mesh/` wrote cache files among the sources).
     pub fn new(cache_dir: PathBuf) -> Self {
@@ -510,6 +535,7 @@ impl MeshStreamer {
                     physics_convex: None,
                     physics_mesh: None,
                     version: 1,
+                    creator: uuid::Uuid::nil(),
                 }),
                 stage: Stage::Known,
                 local: true,
@@ -539,6 +565,21 @@ impl MeshStreamer {
     /// put its wearer back in the cloud.
     pub fn failed(&self, id: &Uuid) -> bool {
         self.entries.get(id).is_some_and(|e| e.gone || e.failures > EXPECTED_FAILURES)
+    }
+
+    /// "Reload avatar" (`app/avatar_reload.rs`): a mesh given up or waiting
+    /// for its next retry is asked again at once, with its failures
+    /// forgotten, as if no download had failed. A mesh loaded or on its way
+    /// is left alone. Whether it was asked again.
+    pub fn retry_failed(&mut self, id: &Uuid) -> bool {
+        let Some(e) = self.entries.get_mut(id).filter(|e| !e.local && e.failures > 0) else {
+            return false;
+        };
+        e.failures = 0;
+        e.gone = false;
+        e.retry_at = None;
+        Self::attend(&mut self.todo, *id, e);
+        true
     }
 
     /// Diagnostic: the state of a mesh asset, without requesting it.
@@ -626,16 +667,20 @@ impl MeshStreamer {
                     Stage::New => {
                         e.stage = Stage::Reading;
                         let path = cache_path(&self.cache_dir, &id);
-                        jobs.spawn(move || {
-                            let bytes = path
-                                .and_then(|path| crate::cache::read_touch(path).ok())
-                                .and_then(MeshBytes::decode);
-                            crate::deep_profile::mesh_cache_read(bytes.is_some());
-                            let timer = crate::deep_profile::timer();
-                            let arrival = bytes.map(|bytes| Box::new(arrival(bytes, None, true)));
-                            crate::deep_profile::mesh_parsed(timer.filter(|_| arrival.is_some()));
-                            JobResult::MeshCache { id, arrival }
-                        });
+                        // (a failed read is a cache miss: the mesh is downloaded)
+                        jobs.spawn_or(
+                            move || {
+                                let bytes = path
+                                    .and_then(|path| crate::cache::read_touch(path).ok())
+                                    .and_then(MeshBytes::decode);
+                                crate::deep_profile::mesh_cache_read(bytes.is_some());
+                                let timer = crate::deep_profile::timer();
+                                let arrival = bytes.map(|bytes| Box::new(arrival(bytes, None, true)));
+                                crate::deep_profile::mesh_parsed(timer.filter(|_| arrival.is_some()));
+                                JobResult::MeshCache { id, arrival }
+                            },
+                            move || JobResult::MeshCache { id, arrival: None },
+                        );
                         break 'visit;
                     }
                     Stage::Failed if e.retries() => {
@@ -737,12 +782,17 @@ impl MeshStreamer {
             let bytes = e.bytes.clone();
             let rig = rig.clone();
             let pool = staging.cloned();
-            jobs.spawn(move || {
-                let timer = crate::deep_profile::timer();
-                let built = build_mesh_lod(id, lod, &bytes, &header, skin, &rig, pool.as_deref());
-                crate::deep_profile::mesh_built(timer);
-                built
-            });
+            jobs.spawn_or(
+                move || {
+                    let timer = crate::deep_profile::timer();
+                    let built = build_mesh_lod(id, lod, &bytes, &header, skin, &rig, pool.as_deref());
+                    crate::deep_profile::mesh_built(timer);
+                    built
+                },
+                move || JobResult::GeometryFailed {
+                    key: GeomKey::Mesh { id, lod },
+                },
+            );
         }
     }
 
@@ -769,12 +819,18 @@ impl MeshStreamer {
                 };
                 let header = e.header.clone();
                 let want_skin = e.skin.is_none() && !e.skin_bad;
-                jobs.spawn(move || {
-                    let timer = crate::deep_profile::timer();
-                    let arrival = Box::new(arrival(bytes, header, want_skin));
-                    crate::deep_profile::mesh_parsed(timer);
-                    JobResult::MeshPart { id, arrival }
-                });
+                jobs.spawn_or(
+                    move || {
+                        let timer = crate::deep_profile::timer();
+                        let arrival = Box::new(arrival(bytes, header, want_skin));
+                        crate::deep_profile::mesh_parsed(timer);
+                        JobResult::MeshPart { id, arrival }
+                    },
+                    move || JobResult::MeshPart {
+                        id,
+                        arrival: Box::new(MeshArrival::invalid("its parse stopped on a panic")),
+                    },
+                );
             }
             _ => {
                 let missing = r.status == 404;
@@ -1107,6 +1163,11 @@ impl MaterialStreamer {
         self.entry(id).material.clone()
     }
 
+    /// The material is loaded, without requesting it.
+    pub fn is_loaded(&self, id: &Uuid) -> bool {
+        self.entries.get(id).is_some_and(|e| e.material.is_some())
+    }
+
     /// Where the material stands; requests it when it is new.
     pub fn resolve(&mut self, id: &Uuid) -> MaterialStatus {
         Self::status_of(self.entry(id))
@@ -1215,12 +1276,16 @@ impl MaterialStreamer {
                     MatState::New => {
                         e.state = MatState::Cache;
                         let path = crate::cache::path(&self.cache_dir, "mat", &id, "mat");
-                        jobs.spawn(move || {
-                            let material = crate::cache::read_touch(path)
-                                .ok()
-                                .and_then(|d| aurora_assets::parse_material_asset(&d).ok());
-                            JobResult::Material { id, material }
-                        });
+                        // (a failed read is a cache miss: the material is downloaded)
+                        jobs.spawn_or(
+                            move || {
+                                let material = crate::cache::read_touch(path)
+                                    .ok()
+                                    .and_then(|d| aurora_assets::parse_material_asset(&d).ok());
+                                JobResult::Material { id, material }
+                            },
+                            move || JobResult::Material { id, material: None },
+                        );
                     }
                     // (without the capability yet: asked again at the next frame)
                     MatState::Retry => {
@@ -1265,13 +1330,17 @@ impl MaterialStreamer {
         match r.data {
             Ok(d) => {
                 let path = crate::cache::path(&self.cache_dir, "mat", &id, "mat");
-                jobs.spawn(move || {
-                    let material = aurora_assets::parse_material_asset(&d).ok();
-                    if material.is_some() {
-                        let _ = crate::cache::write(path, &d);
-                    }
-                    JobResult::Material { id, material }
-                });
+                // (a failed parse is a material that does not parse)
+                jobs.spawn_or(
+                    move || {
+                        let material = aurora_assets::parse_material_asset(&d).ok();
+                        if material.is_some() {
+                            let _ = crate::cache::write(path, &d);
+                        }
+                        JobResult::Material { id, material }
+                    },
+                    move || JobResult::Material { id, material: None },
+                );
                 e.state = MatState::Fetching;
             }
             Err(_) => {
@@ -1441,6 +1510,7 @@ mod tests {
             physics_convex: None,
             physics_mesh: None,
             version: 1,
+            creator: uuid::Uuid::nil(),
         };
         streamer.entries.insert(
             id,
@@ -1931,6 +2001,33 @@ mod tests {
         assert_eq!(s.entries[&id].stage, Stage::Failed);
         assert!(s.todo.is_empty());
         assert!(s.by_key.is_empty());
+    }
+
+    #[test]
+    fn reload_asks_a_given_up_mesh_again_at_once() {
+        let (jobs, _rx) = Jobs::new();
+        let (_rt, fetcher) = idle_fetcher();
+        let rig = crate::scene::avatar::AvatarLibrary::load().rig.clone();
+        let mut s = mesh_streamer();
+        let id = Uuid::from_u128(1);
+        for _ in 0..=EXPECTED_FAILURES {
+            let key = mesh_fetching(&mut s, id);
+            s.on_fetch(failed(key, 404), &jobs);
+        }
+        assert!(s.failed(&id));
+        assert!(!s.entries[&id].retries());
+        // no wait for its retry time (ten minutes for a missing asset)
+        assert!(s.retry_failed(&id));
+        assert!(!s.failed(&id));
+        s.update(&jobs, &fetcher, CAP, &rig);
+        assert_eq!(s.entries[&id].stage, Stage::Fetching);
+        assert!(!s.by_key.is_empty(), "asked again");
+        // a mesh on its way, unknown or held in memory is left alone
+        assert!(!s.retry_failed(&id));
+        assert!(!s.retry_failed(&Uuid::from_u128(2)));
+        let local = Uuid::from_u128(3);
+        s.insert_demo_static(local);
+        assert!(!s.retry_failed(&local));
     }
 
     fn denim_override() -> PbrOverride {

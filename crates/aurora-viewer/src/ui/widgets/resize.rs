@@ -103,18 +103,25 @@ impl Edge {
         }
     }
 
-    /// The edges a window resized in height only offers: the top and the
-    /// bottom, along the whole width (no corner).
-    fn moves_height_only(self) -> bool {
-        matches!(self, Self::Top | Self::Bottom)
+    /// Whether a window resized along `axes` offers this edge: in height
+    /// only the top and the bottom, in width only the left and the right,
+    /// each along its whole side (no corner).
+    fn offered(self, axes: Axes) -> bool {
+        match axes {
+            Axes::Both => true,
+            Axes::Height => matches!(self, Self::Top | Self::Bottom),
+            Axes::Width => matches!(self, Self::Left | Self::Right),
+        }
     }
 
     /// Where this edge of the window `rect` (its outline) is grabbed; along
     /// the whole side for a window resized in height only.
-    fn hit_rect_of(self, rect: Rect, height_only: bool) -> Rect {
-        match self {
-            Self::Top if height_only => Rect::from_x_y_ranges(rect.x_range(), rect.top() - SIDE_OUT..=rect.top() + SIDE_IN),
-            Self::Bottom if height_only => Rect::from_x_y_ranges(rect.x_range(), rect.bottom() - SIDE_IN..=rect.bottom() + SIDE_OUT),
+    fn hit_rect_of(self, rect: Rect, axes: Axes) -> Rect {
+        match (self, axes) {
+            (Self::Top, Axes::Height) => Rect::from_x_y_ranges(rect.x_range(), rect.top() - SIDE_OUT..=rect.top() + SIDE_IN),
+            (Self::Bottom, Axes::Height) => Rect::from_x_y_ranges(rect.x_range(), rect.bottom() - SIDE_IN..=rect.bottom() + SIDE_OUT),
+            (Self::Left, Axes::Width) => Rect::from_x_y_ranges(rect.left() - SIDE_OUT..=rect.left() + SIDE_IN, rect.y_range()),
+            (Self::Right, Axes::Width) => Rect::from_x_y_ranges(rect.right() - SIDE_IN..=rect.right() + SIDE_OUT, rect.y_range()),
             _ => self.hit_rect(rect),
         }
     }
@@ -306,12 +313,23 @@ fn aspect_rect(start: Rect, rect: Rect, edge: Edge, ratio: f32, chrome: Vec2, mi
 /// `violet_light` meanwhile (as egui's own windows light theirs,
 /// `paint_frame_interaction`), both faded in and out.
 pub(super) fn handles(ctx: &Context, p: &Palette, response: &egui::Response) {
-    handles_of(ctx, p, response, false);
+    handles_of(ctx, p, response, Axes::Both);
 }
 
-/// [`handles`]; `height_only`: the top and bottom edges alone, without the
-/// corner's mark (a window whose width is set by what it lines up with).
-pub(super) fn handles_of(ctx: &Context, p: &Palette, response: &egui::Response, height_only: bool) {
+/// What a window's edges resize.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Axes {
+    Both,
+    /// The top and bottom edges alone, without the corner's mark (a window
+    /// whose width is set by what it lines up with).
+    Height,
+    /// The left and right edges alone, without the corner's mark (a window
+    /// whose height follows its content).
+    Width,
+}
+
+/// [`handles`], resizing along `axes`.
+pub(super) fn handles_of(ctx: &Context, p: &Palette, response: &egui::Response, axes: Axes) {
     let window = response.layer_id.id;
     let mut ui = Ui::new(
         ctx.clone(),
@@ -321,10 +339,10 @@ pub(super) fn handles_of(ctx: &Context, p: &Palette, response: &egui::Response, 
     ui.set_clip_rect(ctx.content_rect());
     ui.set_min_size(response.rect.size());
     let (mut hovered, mut dragged, mut corner) = ([false; 4], [false; 4], false);
-    for edge in Edge::ALL.into_iter().filter(|edge| !height_only || edge.moves_height_only()) {
+    for edge in Edge::ALL.into_iter().filter(|edge| edge.offered(axes)) {
         let response = ui
             .interact_opt(
-                edge.hit_rect_of(response.rect, height_only),
+                edge.hit_rect_of(response.rect, axes),
                 edge.id(window),
                 Sense::DRAG,
                 egui::InteractOptions { move_to_top: true },
@@ -333,6 +351,15 @@ pub(super) fn handles_of(ctx: &Context, p: &Palette, response: &egui::Response, 
         response.widget_info(|| egui::WidgetInfo::new(egui::Role::Splitter));
         if response.dragged() {
             ctx.set_cursor_icon(edge.cursor());
+        }
+        // `move_to_top` above orders widgets within the layer only. egui
+        // raises the window whose area holds a press, which knows nothing of
+        // the grip outside it: over another window, that one came to the
+        // front (#2422). The Legacy Viewer brings the resized floater to the
+        // front (LLFloater::handleMouseDown), so raise this one as well; both
+        // asking in the same pass keeps their order.
+        if response.is_pointer_button_down_on() || response.dragged() {
+            ctx.move_to_top(response.layer_id);
         }
         for (side, moves) in edge.sides().into_iter().enumerate() {
             hovered[side] |= moves && response.hovered();
@@ -350,7 +377,7 @@ pub(super) fn handles_of(ctx: &Context, p: &Palette, response: &egui::Response, 
     let lit = std::array::from_fn(|side| strength * ctx.animate_bool(window.with(("floater_edge_lit", side)), lit[side]));
     let painter = ui.painter();
     outline(painter, p, response.rect, lit);
-    if !height_only {
+    if axes == Axes::Both {
         corner_arc(
             painter,
             p,
@@ -598,6 +625,80 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// #2422: the grip just outside a window lies over the window behind it.
+    /// A press there resizes the front window and leaves the order alone, as
+    /// the Legacy Viewer's resize bars, inside their floater, bring that one
+    /// to the front (LLFloater::handleMouseDown, llui/llfloater.cpp).
+    #[test]
+    fn an_outer_grip_over_another_window_resizes_the_front_one() {
+        let ctx = Context::default();
+        let mut frame = 0;
+        let mut show = |events: Vec<egui::Event>| {
+            frame += 1;
+            let palette = crate::theme::Theme::default().palette();
+            let mut output = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0))),
+                    time: Some(frame as f64 / 60.0),
+                    events,
+                    ..Default::default()
+                },
+                |ui| {
+                    // the back window first: the one shown later opens above it
+                    for (id, pos, size) in [
+                        ("order_back", pos2(300.0, 200.0), vec2(440.0, 300.0)),
+                        ("order_front", pos2(150.0, 250.0), vec2(300.0, 200.0)),
+                    ] {
+                        let title = aurora_i18n::tr!("common-inventory");
+                        let body = |ui: &mut Ui| ui.set_min_height(ui.available_height());
+                        Floater::new(id, title, pos, size)
+                            .silent()
+                            .show(ui.ctx(), &palette, &mut true, body);
+                    }
+                },
+            );
+            output.textures_delta.clear();
+            let rect = |id: &str| ctx.memory(|memory| memory.area_rect(Id::unique(id)).unwrap());
+            (rect("order_back"), rect("order_front"))
+        };
+        let (mut back, mut front) = show(vec![]);
+        for _ in 0..8 {
+            (back, front) = show(vec![]);
+        }
+        let overlap = back.intersect(front);
+        let on_top = |ctx: &Context| ctx.layer_id_at(overlap.center()).map(|layer| layer.id);
+        assert!(overlap.is_positive() && on_top(&ctx) == Some(Id::unique("order_front")));
+        let grip = pos2(front.right() + 2.0, front.center().y);
+        assert!(back.contains(grip) && !front.contains(grip), "{back:?} {front:?}");
+        let button = |pos, pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Default::default(),
+        };
+        show(vec![egui::Event::PointerMoved(grip)]);
+        show(vec![button(grip, true)]);
+        let target = grip + vec2(30.0, 0.0);
+        show(vec![egui::Event::PointerMoved(target)]);
+        show(vec![button(target, false)]);
+        let (back_after, front_after) = show(vec![]);
+        assert_eq!(back_after, back, "the window behind stays put");
+        assert!(
+            (front_after.width() - front.width() - 30.0).abs() < 1.0 && front_after.left() == front.left(),
+            "{front:?} -> {front_after:?}"
+        );
+        assert_eq!(on_top(&ctx), Some(Id::unique("order_front")), "the front window stays in front");
+        assert_eq!(ctx.dragged_id(), None);
+        // a click well inside the window behind still raises it
+        let inside = pos2(back.right() - 40.0, back.center().y);
+        assert!(!front_after.expand(SIDE_OUT + CORNER_OUT).contains(inside));
+        show(vec![egui::Event::PointerMoved(inside)]);
+        show(vec![button(inside, true)]);
+        show(vec![button(inside, false)]);
+        show(vec![]);
+        assert_eq!(on_top(&ctx), Some(Id::unique("order_back")));
     }
 
     #[test]

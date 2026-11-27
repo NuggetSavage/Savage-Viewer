@@ -24,8 +24,10 @@ use crate::ui::presence::{self, Status};
 use crate::ui::widgets::{self, ActionKind, Floater, hero};
 use crate::ui::{emoji::Emoji, fonts, group_profile, icons, menu};
 use crate::world::World;
+use crate::world::names::NameScope;
 use crate::world::profiles::{self, Online};
 use crate::world::social::{Friend, rights};
+use aurora_i18n::UiUpper;
 use aurora_llsd::llsd_map;
 use aurora_net::{AvatarProfile, NetCommand};
 use egui::{Color32, FontId, Pos2, Rect, Response, RichText, Sense, Vec2, pos2};
@@ -120,7 +122,7 @@ pub(super) fn window(ctx: &egui::Context, env: &mut Env, w: &mut Window, index: 
     let title = if own {
         aurora_i18n::tr!("ui-profile-aurora-my-profile").to_owned()
     } else {
-        display_name(world, &w.id)
+        display_name(world, w.scope, &w.id)
     };
     let screen = ctx.content_rect();
     let pos = screen.center() - DEFAULT_SIZE * 0.5 + Vec2::splat(24.0 * (index % 6) as f32);
@@ -135,21 +137,21 @@ pub(super) fn window(ctx: &egui::Context, env: &mut Env, w: &mut Window, index: 
 }
 
 /// The name in large: the display name, else the name the viewer has.
-pub(super) fn display_name(world: &World, id: &Uuid) -> String {
+pub(super) fn display_name(world: &World, scope: NameScope, id: &Uuid) -> String {
     world
         .social
         .avatar_names
-        .get(id)
+        .get_in(scope, id)
         .map(|n| n.display_name.clone())
         .filter(|n| !n.is_empty())
-        .unwrap_or_else(|| world.social.name_of(id))
+        .unwrap_or_else(|| world.social.name_in(scope, id))
 }
 
 /// The line under the name: the legacy name and the username, each when it
 /// differs from the name above.
-fn names_line(world: &World, id: &Uuid, shown: &str) -> Vec<String> {
+fn names_line(world: &World, scope: NameScope, id: &Uuid, shown: &str) -> Vec<String> {
     let mut parts = Vec::new();
-    let from_names = world.social.avatar_names.get(id).and_then(|n| {
+    let from_names = world.social.avatar_names.get_in(scope, id).and_then(|n| {
         let (first, last) = (n.legacy_first.trim(), n.legacy_last.trim());
         match (first.is_empty(), last.is_empty() || last.eq_ignore_ascii_case("resident")) {
             (true, _) => None,
@@ -157,13 +159,13 @@ fn names_line(world: &World, id: &Uuid, shown: &str) -> Vec<String> {
             (false, false) => Some(format!("{first} {last}")),
         }
     });
-    if let Some(legacy) = from_names.or_else(|| world.legacy_name(id)).filter(|n| n != shown) {
+    if let Some(legacy) = from_names.or_else(|| world.legacy_name_in(scope, id)).filter(|n| n != shown) {
         parts.push(legacy);
     }
     if let Some(user) = world
         .social
         .avatar_names
-        .get(id)
+        .get_in(scope, id)
         .map(|n| n.username.clone())
         .filter(|u| !u.is_empty() && u != shown && !parts.contains(u))
     {
@@ -197,6 +199,12 @@ fn status_of(world: &World, id: &Uuid, own: bool, profile: Option<&AvatarProfile
 /// The region of a resident the viewer sees (its coarse location), or ours.
 fn region_of(world: &World, id: &Uuid, own: bool) -> Option<String> {
     if world.rlva.has("showloc") {
+        return None;
+    }
+    // Another resident's region comes from the avatars around us, which
+    // RlvActions::canShowNearbyAgents (indra/newview/rlvactions.cpp) hides
+    // from the nearby list and the radar under @shownearby.
+    if !own && world.rlva.has("shownearby") {
         return None;
     }
     if own {
@@ -337,7 +345,7 @@ fn tabs_of() -> Vec<usize> {
     vec![TAB_SL, TAB_PICKS, TAB_CLASSIFIEDS, TAB_RL, TAB_FEED, TAB_NOTES]
 }
 
-/// What is edited and not saved, for the bar ("bio, 1 place").
+/// What is edited and not saved, for the bar ("bio, 1 pick").
 fn unsaved_parts(w: &Window) -> Vec<String> {
     let mut parts = Vec::new();
     if w.about.dirty() {
@@ -420,6 +428,7 @@ fn body(ui: &mut egui::Ui, env: &mut Env, w: &mut Window) {
         w.web.focused = false;
     }
     // the bar of the edits not saved stays at the bottom
+    w.pick_wait_notice(ui, env.p, env.world, env.actions);
     let closing = w.confirm_close;
     let bar = closing || (own && has_unsaved(w));
     let bar_h = if bar { 46.0 } else { 0.0 };
@@ -612,7 +621,7 @@ fn photo(ui: &mut egui::Ui, env: &mut Env, w: &mut Window, rect: Rect, ring: f32
     let friend = world.social.friends.iter().find(|fr| fr.id == id);
     let pic = env.pics.get(&id);
     let status = status_of(world, &id, own, profile, friend);
-    paint_photo(ui, p, rect, ring, pic, &display_name(world, &id), status, w.editing);
+    paint_photo(ui, p, rect, ring, pic, &display_name(world, w.scope, &id), status, w.editing);
     let resp = ui.interact(rect, ui.scope_id().with(("profile-photo", id)), Sense::click());
     if pic.is_some() && !w.editing && resp.on_hover_text(aurora_i18n::tr!("ui-profile-aurora-big-photo")).clicked() {
         w.open_photo(PictureSlot::SecondLife, profile.map_or(Uuid::nil(), |pr| pr.sl_image));
@@ -637,7 +646,7 @@ fn who_it_is(
     let (p, world) = (env.p, env.world);
     let id = w.id;
     let profile = world.profiles.get(&id);
-    let name = display_name(world, &id);
+    let name = display_name(world, w.scope, &id);
     ui.spacing_mut().item_spacing.y = 1.0;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 8.0;
@@ -662,7 +671,7 @@ fn who_it_is(
             env.actions.push(ProfileAction::DisplayName);
         }
     });
-    let mut names = names_line(world, &id, &name);
+    let mut names = names_line(world, w.scope, &id, &name);
     let mut age = None;
     if compact {
         // the username alone, then the age (the mock-up's "orion.exemple · 19 ans")
@@ -904,13 +913,20 @@ fn act_button(ui: &mut egui::Ui, env: &mut Env, w: &mut Window, act: Act, f: &Fa
             true,
             None,
         ),
+        // LLPanelProfileSecondLife::updateButtons: greyed when @showloc
+        // forbids offering our location to them
         Act::OfferTeleport => (
             "send-filled",
             aurora_i18n::tr!("ui-profile-aurora-offer-tp"),
             ActionKind::Flat,
-            true,
+            env.world.rlva_can_offer_teleport(id),
             None,
         ),
+        // Enabled under @pay too, as in the Legacy style
+        // (`profile::action_buttons`): LLPanelProfileSecondLife::updateButtons
+        // (indra/newview/llpanelprofile.cpp) never tests it, and the pay
+        // window refuses to open with the "blocked" notice
+        // (RlvBehaviourToggleHandler<RLV_BHVR_PAY>, indra/newview/rlvhandler.cpp).
         Act::Pay => ("coin-filled", aurora_i18n::tr!("common-pay"), ActionKind::Flat, true, None),
         Act::Block => {
             let label = if f.blocked {
@@ -935,7 +951,13 @@ fn act_button(ui: &mut egui::Ui, env: &mut Env, w: &mut Window, act: Act, f: &Fa
             true,
             None,
         ),
-        Act::Done => ("check", aurora_i18n::tr!("ui-profile-aurora-done"), ActionKind::Primary, true, None),
+        Act::Done => (
+            "check",
+            aurora_i18n::tr!("ui-profile-aurora-done"),
+            ActionKind::Primary,
+            !w.pick_save_waits(),
+            None,
+        ),
     };
     // the block button and "…" are icons in the large header too
     let alone = look != Look::Labelled || matches!(act, Act::Block | Act::More);
@@ -975,23 +997,23 @@ fn act_button(ui: &mut egui::Ui, env: &mut Env, w: &mut Window, act: Act, f: &Fa
         Act::Call => context::request(ui.ctx(), CtxAction::Call(id)),
         Act::Edit => w.editing = true,
         Act::ViewAsOthers => w.editing = false,
-        Act::Done => {
-            save_all(w, env.actions);
-            w.editing = false;
-        }
+        Act::Done => w.editing = !save_all(w, env.actions),
         Act::More => {}
     }
 }
 
 /// "…": the actions that have no button (menu_fs_profile_overflow.xml and
 /// the name field's copy menu).
-fn more_menu(resp: &Response, env: &Env, w: &Window, f: &Facts, compact: bool) {
+fn more_menu(resp: &Response, env: &mut Env, w: &Window, f: &Facts, compact: bool) {
     let (p, world) = (env.p, env.world);
     let id = w.id;
+    let mut invite = false;
     let names = &world.social.avatar_names;
-    let display = names.get(&id).map(|n| n.display(&names.options));
-    let legacy = world.legacy_name(&id);
-    let mappable = world.can_locate_avatar(id);
+    let display = names.get_in(w.scope, &id).map(|n| n.display(&names.options));
+    let legacy = world.legacy_name_in(w.scope, &id);
+    // LLPanelProfileSecondLife::onEnableMenu ("can_show_on_map")
+    let mappable = world.can_locate_avatar(id) && context::can_show_on_map(world);
+    crate::ui::chat::moderation::demo_mark(&resp.ctx, crate::ui::chat::moderation::DemoMark::ProfileMore, resp.rect);
     menu::dropdown(resp, p, egui::PopupCloseBehavior::CloseOnClick, |ui| {
         let ctx = ui.ctx().clone();
         let act = |a: CtxAction| context::request(&ctx, a);
@@ -1008,6 +1030,19 @@ fn more_menu(resp: &Response, env: &Env, w: &Window, f: &Facts, compact: bool) {
         }
         if f.friend && menu::item(ui, p, "user-minus", aurora_i18n::tr!("ui-profile-aurora-remove-friend")) {
             act(CtxAction::RemoveFriend(id));
+        }
+        // menu_profile_other.xml's invite_to_group, after remove_friend
+        // (LLPanelProfileSecondLife::onCommitMenu → LLAvatarActions::
+        // inviteToGroup, llpanelprofile.cpp): no enable callback, and never on
+        // our own profile (menu_profile_self.xml has none)
+        if id != world.agent_id && menu::item(ui, p, "users-plus", aurora_i18n::tr!("ui-context-invite-to-group")) {
+            invite = true;
+        }
+        // menu_profile_other.xml: separator_group_bans, then the ban and its
+        // lifting in all our groups (Profile.EnableItem: canBanFromAnyGroup)
+        if crate::world::group_ban_all::can_ban_anywhere(&world.groups.groups, id, world.agent_id) {
+            menu::separator(ui, p);
+            crate::ui::chat::moderation::ban_all_entries(ui, p, world, id, true);
         }
         menu::separator(ui, p);
         if menu::item_if(
@@ -1042,7 +1077,11 @@ fn more_menu(resp: &Response, env: &Env, w: &Window, f: &Facts, compact: bool) {
         ) {
             act(CtxAction::ShowHistory(Some(id)));
         }
+        context::admin_submenu(ui, p, world, id, act);
     });
+    if invite {
+        env.actions.push(ProfileAction::InviteToGroup(id));
+    }
 }
 
 /// The People tab that has the resident: Friends, Blocked, else Nearby
@@ -1149,7 +1188,7 @@ fn badge_widget(ui: &mut egui::Ui, env: &Env, id: Uuid, b: &Badge, is_friend: bo
     let soft = |c: Color32| c.gamma_multiply(0.14);
     match b {
         Badge::Friend => {
-            if env.world.contact_sets.appearance(&id).replace_friend {
+            if env.world.rlva_contact_appearance(&id).replace_friend {
                 return;
             }
             pill(
@@ -1175,7 +1214,7 @@ fn badge_widget(ui: &mut egui::Ui, env: &Env, id: Uuid, b: &Badge, is_friend: bo
             pill(ui, Some(Lead::Icon(icon)), name, None, fg, soft(fg), Sense::hover());
         }
         Badge::Set(name, color) => {
-            let appearance = env.world.contact_sets.appearance(&id);
+            let appearance = env.world.rlva_contact_appearance(&id);
             let icon = appearance.icons.iter().find(|icon| &icon.set == name);
             let lead = icon
                 .map(|icon| Lead::Icon(crate::world::contact_sets::appearance::ICONS[icon.icon]))
@@ -1436,12 +1475,11 @@ fn tab_dropdown(ui: &mut egui::Ui, env: &Env, w: &mut Window, own: bool) {
     }
 }
 
-/// The link at the right of a card's head; `waiting` greys it out with
-/// that tooltip (a feature not ported yet).
+/// The link at the right of a card's head; `tip` explains it on hover.
 struct Link<'a> {
     text: &'a str,
     icon: Option<&'a str>,
-    waiting: Option<&'a str>,
+    tip: Option<&'a str>,
 }
 
 impl<'a> Link<'a> {
@@ -1449,7 +1487,7 @@ impl<'a> Link<'a> {
         Link {
             text,
             icon: None,
-            waiting: None,
+            tip: None,
         }
     }
 }
@@ -1484,34 +1522,40 @@ fn card(
                     ui.spacing_mut().item_spacing.x = 6.0;
                     let (rect, _) = ui.allocate_exact_size(Vec2::new(12.0, 14.0), Sense::hover());
                     paint_icon(ui, icon, rect.center(), 11.0, p.muted_dim);
-                    ui.label(RichText::new(title.to_uppercase()).font(semibold(ui, 10.5)).color(p.muted_dim));
+                    ui.label(RichText::new(title.ui_upper()).font(semibold(ui, 10.5)).color(p.muted_dim));
                     if let Some(link) = link {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             ui.spacing_mut().item_spacing.x = 3.0;
-                            let color = if link.waiting.is_some() { p.muted_dim } else { p.violet_light };
-                            let sense = if link.waiting.is_some() { Sense::hover() } else { Sense::click() };
+                            let color = p.violet_light;
                             // right to left: a chevron after the text, a
                             // leading icon before it
                             let trailing = link.icon == Some("chevron-right");
                             let icon = |ui: &mut egui::Ui| {
-                                if let Some(icon) = link.icon {
-                                    let (rect, _) = ui.allocate_exact_size(Vec2::splat(13.0), Sense::hover());
+                                link.icon.is_some_and(|icon| {
+                                    let (rect, mut r) = ui.allocate_exact_size(Vec2::splat(13.0), Sense::click());
                                     paint_icon(ui, icon, rect.center(), 12.0, color);
-                                }
+                                    r = r.on_hover_cursor(egui::CursorIcon::PointingHand);
+                                    if let Some(tip) = link.tip {
+                                        r = r.on_hover_text(tip);
+                                    }
+                                    r.clicked()
+                                })
                             };
+                            let mut hit = false;
                             if trailing {
-                                icon(ui);
+                                hit |= icon(ui);
                             }
-                            let mut r =
-                                ui.add(egui::Label::new(RichText::new(link.text).font(semibold(ui, 11.5)).color(color)).sense(sense));
+                            let mut r = ui
+                                .add(egui::Label::new(RichText::new(link.text).font(semibold(ui, 11.5)).color(color)).sense(Sense::click()))
+                                .on_hover_cursor(egui::CursorIcon::PointingHand);
+                            if let Some(tip) = link.tip {
+                                r = r.on_hover_text(tip);
+                            }
+                            hit |= r.clicked();
                             if !trailing {
-                                icon(ui);
+                                hit |= icon(ui);
                             }
-                            r = match link.waiting {
-                                Some(tip) => r.on_hover_text(tip),
-                                None => r.on_hover_cursor(egui::CursorIcon::PointingHand),
-                            };
-                            clicked = r.clicked() && link.waiting.is_none();
+                            clicked = hit;
                         });
                     }
                 });
@@ -1530,7 +1574,7 @@ fn card(
     clicked
 }
 
-/// The Profile tab: About and the favorite places on the left, Info,
+/// The Profile tab: About and the picks on the left, Info,
 /// Groups and the private notes on the right; one column when compact. An
 /// item is given by dropping it anywhere on the window (`super::give_drop`).
 fn profile_tab(ui: &mut egui::Ui, env: &mut Env, w: &mut Window, compact: bool) {
@@ -1723,7 +1767,8 @@ fn partner_chip(ui: &mut egui::Ui, env: &mut Env, partner: Uuid) {
     let (p, world) = (env.p, env.world);
     world.social.avatar_names.want(&partner);
     env.wanted_pics.insert(partner);
-    let name = display_name(world, &partner);
+    // LLPanelProfileSecondLife names the partner whatever `@shownames`
+    let name = display_name(world, NameScope::Roster, &partner);
     let font = semibold(ui, 12.5);
     let galley = ui.painter().layout_no_wrap(name.clone(), font, p.ink);
     let size = Vec2::new(2.0 + 20.0 + 6.0 + galley.size().x + 9.0, 24.0);
@@ -1738,11 +1783,11 @@ fn partner_chip(ui: &mut egui::Ui, env: &mut Env, partner: Uuid) {
         .on_hover_cursor(egui::CursorIcon::PointingHand)
         .clicked()
     {
-        super::request_open(ui.ctx(), partner);
+        crate::ui::context::request(ui.ctx(), crate::ui::context::CtxAction::RosterProfile(partner));
     }
 }
 
-/// The first three favorite places as cards, and the way to all of them.
+/// The first three picks as cards, and the way to all of them.
 fn picks_card(ui: &mut egui::Ui, env: &mut Env, w: &mut Window) {
     let (p, world) = (env.p, env.world);
     let Some(pr) = world.profiles.get(&w.id) else {
@@ -1782,14 +1827,14 @@ fn picks_card(ui: &mut egui::Ui, env: &mut Env, w: &mut Window) {
     }
     if let Some(pick) = open {
         w.tab = TAB_PICKS;
-        if pick.is_some() {
+        if pick.is_some() && !w.pick_save_waits() {
             w.pick_sel = pick;
             w.pick_edit = None;
         }
     }
 }
 
-/// One favorite place: its snapshot with the rating of its region, its
+/// One pick: its snapshot with the rating of its region, its
 /// name, place and description; "TP" over the snapshot under the pointer.
 /// True when it is clicked (to show it in its tab).
 fn pick_card(ui: &mut egui::Ui, env: &mut Env, w: &mut Window, pick: Uuid, width: f32) -> bool {
@@ -1919,13 +1964,13 @@ fn groups_card(ui: &mut egui::Ui, env: &mut Env, w: &Window) {
         return;
     }
     let title = aurora_i18n::tr!("ui-profile-aurora-groups", count = pr.groups.len() as i64);
-    // inviting to a group is not ported yet: the link waits greyed
     let invite = (!own).then(|| Link {
         text: aurora_i18n::tr!("ui-profile-aurora-invite"),
-        icon: Some("user-plus"),
-        waiting: Some(aurora_i18n::tr!("ui-profile-invite-to-group-coming-soon")),
+        // the group invitation's icon everywhere (avatar menu, profile menus)
+        icon: Some("users-plus"),
+        tip: Some(aurora_i18n::tr!("ui-context-invite-to-group")),
     });
-    card(ui, p, Some(("users-group", &title)), invite, false, |ui| {
+    if card(ui, p, Some(("users-group", &title)), invite, false, |ui| {
         if pr.groups.is_empty() {
             ui.label(RichText::new(aurora_i18n::tr!("common-none")).size(12.5).color(p.muted));
             return;
@@ -1977,7 +2022,11 @@ fn groups_card(ui: &mut egui::Ui, env: &mut Env, w: &Window) {
                 group_profile::request_open(ui.ctx(), g.id);
             }
         }
-    });
+    }) {
+        // LLPanelProfile::onCommitMenu ("invite_to_group") /
+        // LLAvatarActions::inviteToGroup (indra/newview/llpanelprofile.cpp)
+        env.actions.push(ProfileAction::InviteToGroup(w.id));
+    }
 }
 
 /// Our private notes on someone, a click away from the Notes tab.
@@ -2064,7 +2113,7 @@ fn switch_row(ui: &mut egui::Ui, p: &Palette, icon: &str, label: &str, on: &mut 
     changed
 }
 
-/// "Unsaved changes (bio, 1 place)": while editing, Cancel puts the texts
+/// "Unsaved changes (bio, 1 pick)": while editing, Cancel puts the texts
 /// back and Save sends them; when closing, Cancel keeps the window, Ignore
 /// closes it without saving and Save closes it after saving
 /// (LLFloaterProfile's ProfileUnsavedChanges).
@@ -2094,29 +2143,29 @@ fn unsaved_bar(ui: &mut egui::Ui, env: &mut Env, w: &mut Window, closing: bool) 
                 ui.label(RichText::new(text).font(semibold(ui, 12.5)).color(p.amber));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let size = Vec2::new(0.0, 26.0);
-                    if widgets::action_button(
+                    if widgets::action_button_if(
                         ui,
                         p,
                         "device-floppy-filled",
                         aurora_i18n::tr!("common-save"),
                         ActionKind::Primary,
                         size,
+                        !w.pick_save_waits(),
                     )
                     .clicked()
                     {
-                        save_all(w, env.actions);
                         if closing {
-                            w.open = false;
+                            w.answer_close(super::CloseChoice::Save, env.actions);
+                        } else {
+                            save_all(w, env.actions);
                         }
-                        w.confirm_close = false;
                     }
                     if closing && widgets::action_button(ui, p, "", aurora_i18n::tr!("common-ignore"), ActionKind::Flat, size).clicked() {
-                        revert(w);
-                        w.open = false;
+                        w.answer_close(super::CloseChoice::Ignore, env.actions);
                     }
                     if widgets::action_button(ui, p, "", aurora_i18n::tr!("common-cancel"), ActionKind::Flat, size).clicked() {
                         if closing {
-                            w.confirm_close = false;
+                            w.answer_close(super::CloseChoice::Cancel, env.actions);
                         } else {
                             revert(w);
                         }
@@ -2145,3 +2194,29 @@ impl Edit {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod privacy_tests {
+    use super::*;
+
+    #[test]
+    fn another_residents_region_is_hidden_under_shownearby_but_ours_is_not() {
+        let mut world = World::new(std::sync::Arc::new(crate::scene::avatar::AvatarLibrary::load()));
+        for event in crate::demo::events() {
+            world.apply(event);
+        }
+        // a resident known by the coarse locations of our region
+        let handle = world.main_region.expect("the demo has a region");
+        let near = Uuid::from_u128(0x5eed);
+        world.coarse.entry(handle).or_default().push((near, glam::Vec3::ONE));
+        assert!(world.regions.get(&handle).is_some_and(|r| !r.name.is_empty()));
+        assert!(region_of(&world, &near, false).is_some());
+        world.rlva.configure(true);
+        world.rlva_console_input("@shownearby=n");
+        assert_eq!(region_of(&world, &near, false), None, "who stands around is hidden");
+        let own = world.agent_id;
+        assert!(region_of(&world, &own, true).is_some(), "our own region is not nearby information");
+        world.rlva_console_input("@shownearby=y");
+        assert!(region_of(&world, &near, false).is_some());
+    }
+}

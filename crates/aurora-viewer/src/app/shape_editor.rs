@@ -66,12 +66,18 @@ impl App {
         }
     }
     pub(super) fn open_shape_editor(&mut self, item: uuid::Uuid) {
-        if !self.close_wearable_editor() {
-            return;
-        }
         if !self.close_physics_editor_for_shape() {
             self.appearance_ui.message = aurora_i18n::tr!("physics-other-editor").into();
             return;
+        }
+        if self.wearable_ui.open && !self.wearable_ui.suspend_for_shape(&self.world) {
+            if self.wearable_ui.draft.as_ref().is_some_and(|d| !d.dirty() && d.pending.is_none()) {
+                // Keep the published local bakes in place while shape mode
+                // switches the compositor to the saved layers of the outfit.
+                self.wearable_ui.close_controls(&mut self.world);
+            } else if !self.close_wearable_editor() {
+                return;
+            }
         }
         self.shape_ui.hints = self.settings.shape_show_hints;
         self.shape_ui.feet = self.settings.shape_height_feet;
@@ -242,6 +248,27 @@ impl App {
             );
         }
         self.shape_ui.changed(&mut self.world);
+        // AURORA_DEMO_SHAPE_XML=<file>: the Import button's path without its dialog.
+        if let Ok(path) = std::env::var("AURORA_DEMO_SHAPE_XML")
+            && let Some(draft) = &self.shape_ui.draft
+        {
+            self.shape_ui.xml.start_file(&self.egui_ctx, draft, path.into());
+        }
+        // AURORA_DEMO_SHAPE_XML_EXPORT=<file>: the Export button's path without
+        // its dialog, under the same permission rule (`readonly` refuses it).
+        if let Ok(path) = std::env::var("AURORA_DEMO_SHAPE_XML_EXPORT")
+            && let Some(draft) = &self.shape_ui.draft
+        {
+            let allowed = draft.can_export_xml(&self.world);
+            let lad = &self.world.avatar_lib.shape_params;
+            if let Err(message) = self
+                .shape_ui
+                .xml_export
+                .start_file(&self.egui_ctx, draft, allowed, lad, path.into())
+            {
+                self.shape_ui.message = message;
+            }
+        }
         self.focus_shape_category();
         if mode == "mesh-drag" {
             self.shape_ui.demo_drag = Some(std::time::Instant::now());

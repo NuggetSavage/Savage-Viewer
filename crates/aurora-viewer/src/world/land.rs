@@ -22,6 +22,8 @@ pub mod powers {
     pub const LAND_DEED: u64 = 1 << 12;
     pub const LAND_RELEASE: u64 = 1 << 13;
     pub const LAND_SET_SALE_INFO: u64 = 1 << 14;
+    /// Divide and join parcels (roles_constants.h GP_LAND_DIVIDE_JOIN).
+    pub const LAND_DIVIDE_JOIN: u64 = 1 << 15;
     pub const LAND_FIND_PLACES: u64 = 1 << 17;
     pub const LAND_CHANGE_IDENTITY: u64 = 1 << 18;
     pub const LAND_SET_LANDING_POINT: u64 = 1 << 19;
@@ -64,12 +66,14 @@ const REFRESH_AFTER_UPDATE: Duration = Duration::from_secs(5);
 /// A refresh without an answer is forgotten after this long.
 const REFRESH_TIMEOUT: Duration = Duration::from_secs(10);
 /// PARCEL_GRID_STEP_METERS.
-const GRID_STEP: f32 = 4.0;
+pub(super) const GRID_STEP: f32 = 4.0;
 
 /// Who the agent is, for the permission rules.
 pub struct AgentRights<'a> {
     pub id: Uuid,
     pub groups: &'a [GroupMembership],
+    /// The region gave us a god level (Advanced › Request Admin Status).
+    pub god: bool,
 }
 
 impl AgentRights<'_> {
@@ -83,9 +87,10 @@ impl AgentRights<'_> {
     }
 }
 
-/// LLViewerParcelMgr::isParcelOwnedByAgent (we are never godlike).
+/// LLViewerParcelMgr::isParcelOwnedByAgent.
 pub fn owned_by_agent(p: &ParcelInfo, a: &AgentRights, power: u64) -> bool {
-    if p.owner_id == a.id {
+    // gods can always assume ownership
+    if a.god || p.owner_id == a.id {
         return true;
     }
     // only gods can assume ownership of public land
@@ -100,9 +105,12 @@ pub fn owned_by_agent(p: &ParcelInfo, a: &AgentRights, power: u64) -> bool {
 /// to, or a group role allowed to create there. "Belong to" rather than the
 /// active group: objects are rezzed under the land's group when we are in
 /// it (`group_for_rez`, RezUnderLandGroup, on by default in both viewers).
-/// The Legacy Viewer adds gods, which we never are; estate managers get
-/// nothing more there either.
+/// Admin status also permits building anywhere; estate managers get
+/// nothing more here.
 pub fn agent_can_build(p: &ParcelInfo, a: &AgentRights) -> bool {
+    if a.god {
+        return true;
+    }
     let owner = p.owner_id.is_nil() || (!p.is_group_owned && p.owner_id == a.id);
     let group = a.in_group(&p.group_id) && p.flags & pf::CREATE_GROUP_OBJECTS != 0;
     owner || p.flags & pf::CREATE_OBJECTS != 0 || group || a.has_power(&p.group_id, powers::LAND_ALLOW_CREATE)
@@ -153,10 +161,7 @@ impl super::World {
     }
 
     fn build_rights(&self) -> AgentRights<'_> {
-        AgentRights {
-            id: self.agent_id,
-            groups: &self.groups.groups,
-        }
+        self.agent_rights()
     }
 
     /// allowAgentBuild on the parcel we stand on (mAgentParcel).
@@ -171,9 +176,10 @@ impl super::World {
 }
 
 /// LLViewerParcelMgr::isParcelModifiableByAgent: our own land must be
-/// leased (a purchase waiting for approval cannot be changed).
+/// leased (a purchase waiting for approval cannot be changed), unless we
+/// are a god.
 pub fn modifiable_by_agent(p: &ParcelInfo, a: &AgentRights, power: u64) -> bool {
-    owned_by_agent(p, a, power) && !(p.owner_id == a.id && p.status != land::OS_LEASED)
+    owned_by_agent(p, a, power) && !(p.owner_id == a.id && !a.god && p.status != land::OS_LEASED)
 }
 
 /// LLViewerParcelMgr::canAgentBuyParcel; `can_access` tells if the
@@ -346,7 +352,8 @@ impl EnvSummary {
         };
         if name.is_empty() {
             name = self.track_name(index - 1);
-            if !name.starts_with('(') {
+            // already in brackets: the region's own message (full width in Japanese)
+            if !name.starts_with(['(', '（']) {
                 name = format!("({name})");
             }
         }
@@ -522,6 +529,14 @@ impl Selection {
     }
 }
 
+impl Selection {
+    /// The rectangle asked (west, south, east, north), region metres:
+    /// Admin › Parcel › Claim Public Land claims it.
+    pub fn rect(&self) -> (f32, f32, f32, f32) {
+        self.rect
+    }
+}
+
 /// Context of the agent the selection logic needs from the world.
 pub struct SelectionContext {
     /// Region the agent is in.
@@ -552,6 +567,11 @@ impl ScriptInfo {
 #[derive(Default)]
 pub struct Land {
     pub sel: Option<Selection>,
+    /// Parcels the viewer asked about under the pointer or a resident
+    /// (LLViewerParcelMgr's hover parcel, HOVERED_PARCEL_SEQ_ID), the
+    /// latest last: the land moderation rule reads them for every menu
+    /// alike (world/land_moderation.rs).
+    pub seen_parcels: Vec<(RegionHandle, std::sync::Arc<ParcelInfo>)>,
     pub covenant: Option<Covenant>,
     covenant_asked: Option<(RegionHandle, Instant)>,
     pub experience_names: HashMap<Uuid, String>,
@@ -1224,10 +1244,64 @@ mod tests {
         }
     }
 
+    /// Build › Land's Subdivide and Abandon land on group-owned land follow
+    /// "Divide and join parcels" (1 << 15) and "Release land" (1 << 13)
+    /// through the shared rule (LLPanelLandInfo::refresh with
+    /// isParcelOwnedByAgent), not Set Landing Point and Change Media.
+    #[test]
+    fn group_land_subdivide_and_abandon_follow_their_powers() {
+        assert_eq!(powers::LAND_DIVIDE_JOIN, 1 << 15);
+        assert_eq!(powers::LAND_RELEASE, 1 << 13);
+        let land = Uuid::from_u128(50);
+        let p = ParcelInfo {
+            owner_id: land,
+            group_id: land,
+            is_group_owned: true,
+            ..Default::default()
+        };
+        let check = |powers_held: u64, god: bool| {
+            let groups = [group(50, powers_held)];
+            let a = AgentRights {
+                id: me(),
+                groups: &groups,
+                god,
+            };
+            (
+                owned_by_agent(&p, &a, powers::LAND_DIVIDE_JOIN),
+                owned_by_agent(&p, &a, powers::LAND_RELEASE),
+            )
+        };
+        assert_eq!(check(powers::LAND_DIVIDE_JOIN, false), (true, false));
+        assert_eq!(check(powers::LAND_RELEASE, false), (false, true));
+        assert_eq!(check(powers::LAND_DIVIDE_JOIN | powers::LAND_RELEASE, false), (true, true));
+        // the powers the panel followed before do not count
+        assert_eq!(
+            check(powers::LAND_SET_LANDING_POINT | powers::LAND_CHANGE_MEDIA, false),
+            (false, false)
+        );
+        // a god has both
+        assert_eq!(check(powers::NONE, true), (true, true));
+        // our own land keeps both
+        let mine = ParcelInfo {
+            owner_id: me(),
+            ..Default::default()
+        };
+        let a = AgentRights {
+            id: me(),
+            groups: &[],
+            god: false,
+        };
+        assert!(owned_by_agent(&mine, &a, powers::LAND_DIVIDE_JOIN) && owned_by_agent(&mine, &a, powers::LAND_RELEASE));
+    }
+
     #[test]
     fn modify_rules_follow_ownership_and_powers() {
         let groups = [group(50, powers::LAND_OPTIONS)];
-        let a = AgentRights { id: me(), groups: &groups };
+        let a = AgentRights {
+            id: me(),
+            groups: &groups,
+            god: false,
+        };
         let mut p = ParcelInfo {
             owner_id: me(),
             ..Default::default()
@@ -1252,7 +1326,11 @@ mod tests {
     fn building_needs_our_land_open_land_or_its_group() {
         let member = [group(50, powers::NONE)];
         let creator = [group(50, powers::LAND_ALLOW_CREATE)];
-        let stranger = AgentRights { id: me(), groups: &[] };
+        let stranger = AgentRights {
+            id: me(),
+            groups: &[],
+            god: false,
+        };
         let mut p = ParcelInfo {
             owner_id: me(),
             group_id: Uuid::from_u128(50),
@@ -1265,18 +1343,33 @@ mod tests {
         // someone else's land with no build: nobody but its group's creators
         p.owner_id = Uuid::from_u128(9);
         assert!(!agent_can_build(&p, &stranger));
-        assert!(!agent_can_build(&p, &AgentRights { id: me(), groups: &member }));
+        assert!(!agent_can_build(
+            &p,
+            &AgentRights {
+                id: me(),
+                groups: &member,
+                god: false
+            }
+        ));
         assert!(agent_can_build(
             &p,
             &AgentRights {
                 id: me(),
-                groups: &creator
+                groups: &creator,
+                god: false,
             }
         ));
         // group building: members only
         p.flags = pf::CREATE_GROUP_OBJECTS;
         assert!(!agent_can_build(&p, &stranger));
-        assert!(agent_can_build(&p, &AgentRights { id: me(), groups: &member }));
+        assert!(agent_can_build(
+            &p,
+            &AgentRights {
+                id: me(),
+                groups: &member,
+                god: false
+            }
+        ));
         // building for everyone
         p.flags = pf::CREATE_OBJECTS;
         assert!(agent_can_build(&p, &stranger));
@@ -1285,19 +1378,39 @@ mod tests {
         p.owner_id = Uuid::from_u128(50);
         p.is_group_owned = true;
         assert!(!agent_can_build(&p, &stranger));
-        assert!(!agent_can_build(&p, &AgentRights { id: me(), groups: &member }));
+        assert!(!agent_can_build(
+            &p,
+            &AgentRights {
+                id: me(),
+                groups: &member,
+                god: false
+            }
+        ));
         assert!(agent_can_build(
             &p,
             &AgentRights {
                 id: me(),
-                groups: &creator
+                groups: &creator,
+                god: false,
+            }
+        ));
+        assert!(agent_can_build(
+            &p,
+            &AgentRights {
+                id: me(),
+                groups: &[],
+                god: true
             }
         ));
     }
 
     #[test]
     fn an_unknown_parcel_is_never_open() {
-        let a = AgentRights { id: me(), groups: &[] };
+        let a = AgentRights {
+            id: me(),
+            groups: &[],
+            god: false,
+        };
         assert_eq!(BuildRight::of(None, &a), BuildRight::Unknown);
         let open = ParcelInfo {
             owner_id: Uuid::from_u128(9),
@@ -1311,7 +1424,11 @@ mod tests {
 
     #[test]
     fn buying_needs_a_sale_for_us() {
-        let a = AgentRights { id: me(), groups: &[] };
+        let a = AgentRights {
+            id: me(),
+            groups: &[],
+            god: false,
+        };
         let mut p = ParcelInfo {
             owner_id: Uuid::from_u128(9),
             ..Default::default()

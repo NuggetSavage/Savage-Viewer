@@ -29,6 +29,7 @@ const HIDDEN: &[&str] = &[
     "settings_version",
     "cache_location",
     "chat_log_location",
+    "custom_language_file",
     "window_fullscreen",
     "new_profile",
 ];
@@ -113,7 +114,9 @@ impl Locks {
             "camera.preset" | "camera.camera_offset" | "camera.focus_offset" | "camera.offset_scale" => self.camera_preset,
             "camera.fov" => self.camera_fov,
             "autoresponse.dnd_text" => self.sendim,
-            "rlva_enabled" => self.restricted,
+            // (RLVa's own switch is free: a change applies at the next
+            // start, world/rlva/switch.rs)
+            "rlva_enabled" => false,
             _ => self.restricted && key.starts_with("rlva."),
         }
     }
@@ -234,6 +237,9 @@ impl Settings {
         self.hover_height_account = current.hover_height_account;
         self.photo_held = current.photo_held.clone();
         self.draw_stepping = current.draw_stepping;
+        // (Autotune's hold: without it, the tuned values would become the
+        // user's and be saved)
+        self.autotune_hold = current.autotune_hold;
         self.newer_file = current.newer_file.clone();
         self.new_profile = current.new_profile;
         self.camera_limits_restored = current.camera_limits_restored;
@@ -305,6 +311,7 @@ mod tests {
             "window_x",
             "cache_location",
             "chat_log_location",
+            "custom_language_file",
             "settings_version",
             "gifs.giphy_key",
             "gifs.klipy_key",
@@ -435,6 +442,30 @@ mod tests {
     }
 
     #[test]
+    fn autotunes_hold_survives_a_change_and_the_users_values_stay_theirs() {
+        use crate::settings::autotune::{Hold, Tuned};
+        let mut s = Settings {
+            draw_distance: 256.0,
+            max_avatars: 16,
+            ..Settings::default()
+        };
+        let mut hold = Hold::new(&s);
+        hold.write(
+            &mut s,
+            Tuned {
+                draw_distance: 64.0,
+                max_avatars: 6,
+            },
+        );
+        s.autotune_hold = Some(hold);
+        set(&mut s, "show_huds", json!(false)).expect("set");
+        assert!(s.autotune_hold.is_some());
+        assert_eq!((s.draw_distance, s.max_avatars), (64.0, 6), "still tuned");
+        let saved = s.to_saved();
+        assert_eq!((saved.draw_distance, saved.max_avatars), (256.0, 16), "the file keeps the user's");
+    }
+
+    #[test]
     fn rlva_locks_name_the_settings_they_hold() {
         let free = Locks::default();
         for key in [
@@ -465,7 +496,9 @@ mod tests {
             restricted: true,
             ..Locks::default()
         };
-        assert!(held.locked("rlva_enabled") && held.locked("rlva.allow_ooc"));
+        assert!(held.locked("rlva.allow_ooc"));
+        // the switch waits for the next start instead
+        assert!(!held.locked("rlva_enabled"));
         assert!(!held.locked("rlva_something_else") && !held.locked("show_huds"));
     }
 }

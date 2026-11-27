@@ -13,9 +13,12 @@ pub mod background;
 pub mod demo;
 pub mod items;
 mod lost;
+pub(crate) mod outgoing;
 mod parents;
 pub mod preview;
 mod system;
+pub mod trash_origins;
+pub mod undo;
 pub mod wearable;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,6 +52,7 @@ pub struct Inventory {
     pub lib_owner: Uuid,
     pub folders: HashMap<Uuid, Folder>,
     pub items: items::Items,
+    pub(crate) outgoing: outgoing::Outgoing,
     /// Folders waiting to be fetched (id, library).
     pub queue: Vec<(Uuid, bool)>,
     /// Folders asked for while the cache file is being read (`hold_requests`).
@@ -59,10 +63,29 @@ pub struct Inventory {
     /// after `ITEM_FETCH_ATTEMPTS`: broken links, which outfits skip instead
     /// of waiting for them (LLViewerInventoryItem::getIsBrokenLink).
     pub missing_items: HashSet<Uuid>,
+    /// Of `missing_items`, those the server answered do not exist: never
+    /// read again this session. The others, only unreadable after their
+    /// attempts (a busy server), are read again after a pause, and when.
+    pub confirmed_missing: HashSet<Uuid>,
+    pub gave_up_at: HashMap<Uuid, std::time::Instant>,
+    /// How many times each unreadable item was given up this session
+    /// ([`ITEM_GIVE_UP_ROUNDS`]).
+    pub give_up_rounds: HashMap<Uuid, u32>,
+    /// Folders the server refuses even at depth 0: over its per-folder reply
+    /// limit (the Legacy Viewer's InventoryLimitReachedAIS). Their direct
+    /// items cannot be read; search and refresh do not ask again in a loop.
+    pub too_big: HashSet<Uuid>,
+    /// When each folder's last read failed (`shown_needs_fetch`).
+    pub(crate) failed_at: HashMap<Uuid, std::time::Instant>,
     /// Failed item reads (network, server error), by attempt.
     pub item_failures: HashMap<Uuid, u8>,
     /// Failed item reads to ask for again (`take_item_retries`).
     pub item_retries: HashSet<Uuid>,
+    /// Items not in the inventory with a read on its way, and until when
+    /// (`claim_item_reads`): one read such an item at a time, so a failure
+    /// counts once. Keyed with whether it is a worn attachment's read,
+    /// whose answer is filed differently (`AttachmentInventoryItems`).
+    pub items_reading: HashMap<(Uuid, bool), std::time::Instant>,
     /// The listing folders the Marketplace data holds in place, set by the
     /// listings every frame (`marketplace::Holds`).
     pub listing_holds: super::marketplace::Holds,
@@ -75,12 +98,38 @@ pub struct Inventory {
     pub(crate) hierarchy_repaired: bool,
     pub(crate) deferred_lost_folders: bool,
     pub(crate) lost_folder_retry_generation: u64,
+    /// Undo and redo of the session's inventory changes, shared by every
+    /// inventory window (`undo`); a new login starts it empty.
+    pub undo: undo::History,
+    /// The folder each entry of the Trash came from (`trash_origins`),
+    /// loaded for the account at login.
+    pub trash_origins: trash_origins::TrashOrigins,
 }
 
 /// Reads of one item before it counts as a broken link's original. A failed
 /// read proves nothing; the Legacy Viewer treats a link still unresolved once
 /// its background fetch ended as broken (LLAppearanceMgr::updateAppearanceFromCOF).
 pub const ITEM_FETCH_ATTEMPTS: u8 = 3;
+/// An item read unanswered this long no longer stops another read of it,
+/// for each chunk of the read before the item's own: the chunks go one
+/// after the other (session.rs `fetch_items`), each answered within its
+/// timeout (AIS: AISAPI::HTTP_TIMEOUT, 180 s; FetchInventory2: 300 s), so
+/// a claim outlasts its read and a failure counts once.
+pub const ITEM_READ_DEADLINE: std::time::Duration = std::time::Duration::from_secs(320);
+/// An item unreadable after its attempts (never answered missing) is read
+/// again after this pause.
+pub const ITEM_GIVE_UP: std::time::Duration = std::time::Duration::from_secs(600);
+/// How many times a session an unreadable item is given up and then read
+/// again; after the last, it stays a broken link for the session.
+pub const ITEM_GIVE_UP_ROUNDS: u32 = 6;
+
+/// The pause before a folder shown open whose read failed is asked for
+/// again (`Inventory::shown_needs_fetch`).
+pub const SHOWN_RETRY: std::time::Duration = std::time::Duration::from_secs(10);
+
+// v3 could store a no-copy original as removed even when the offer never
+// reached a simulator. The folder version alone cannot distinguish that cache.
+const CACHE_VERSION: i32 = 4;
 
 fn first_id(v: &Llsd, key: &str) -> Uuid {
     v.at(0)[key].as_uuid()
@@ -241,12 +290,54 @@ impl Inventory {
         {
             f.state = FetchState::Fetching;
             self.queue.push((id, f.library));
+            // (a folder changed state: the background walk's idle sweep
+            // looks again and times this read, even when its pump did not
+            // run before the app took the queue, e.g. while the region has
+            // no capabilities yet)
+            self.generation += 1;
         }
     }
 
-    pub fn apply(&mut self, contents: Vec<FolderContents>) {
+    /// Set folders back to unread, to be read again. Changes the
+    /// generation when one changes, so the background walk's idle sweep
+    /// looks at them again, like a read the user asks for
+    /// ([`Self::request`]).
+    pub fn mark_unread(&mut self, ids: impl IntoIterator<Item = Uuid>) {
+        let mut changed = false;
+        for id in ids {
+            if let Some(f) = self.folders.get_mut(&id)
+                && f.state != FetchState::Unknown
+            {
+                f.state = FetchState::Unknown;
+                changed = true;
+            }
+        }
+        if changed {
+            self.generation += 1;
+        }
+    }
+
+    /// Whether a folder shown open should be asked for now: one never read,
+    /// or one whose last read failed `SHOWN_RETRY` ago or more. The windows
+    /// ask every frame; without the pause, a folder the server is busy with
+    /// (a large link creation still running) or refuses at once was asked
+    /// again and again, and stayed "loading" for good.
+    pub fn shown_needs_fetch(&self, id: Uuid, now: std::time::Instant) -> bool {
+        match self.folders.get(&id).map(|f| f.state) {
+            Some(FetchState::Unknown) => true,
+            Some(FetchState::Failed) => self.failed_at.get(&id).is_none_or(|at| now.duration_since(*at) >= SHOWN_RETRY),
+            _ => false,
+        }
+    }
+
+    /// Apply folder snapshots. A snapshot older than the contents already
+    /// confirmed locally is not applied: the folder is queued again, like
+    /// AISUpdate::parseCategory's stale-folder refetch (llaisapi.cpp).
+    /// Returns the folders that were stale and queued.
+    pub fn apply(&mut self, contents: Vec<FolderContents>) -> Vec<Uuid> {
         self.generation += 1;
         let mut refreshed: HashMap<Uuid, HashSet<Uuid>> = HashMap::new();
+        let mut stale = Vec::new();
         for mut c in contents {
             // Inventory versions advance as copies arrive (Firestorm's
             // LLInventoryModel::accountForUpdate). A delayed pre-copy HTTP
@@ -256,6 +347,7 @@ impl Inventory {
                 .get(&c.folder_id)
                 .is_some_and(|f| f.state == FetchState::Fetched && c.version < f.info.version)
             {
+                stale.push(c.folder_id);
                 continue;
             }
             let library = self.folders.get(&c.folder_id).map(|f| f.library).unwrap_or(false);
@@ -302,6 +394,9 @@ impl Inventory {
                 f.state = FetchState::Fetched;
                 f.info.version = c.version;
             }
+            // A folder that fits again (the resident split it, or a later read
+            // succeeded) is no longer over the limit.
+            self.too_big.remove(&c.folder_id);
             self.repair_item_parents(&mut c.items, parents::ItemSource::Snapshot);
             self.add_items_inner(c.items);
             self.sort_children(c.folder_id);
@@ -331,6 +426,13 @@ impl Inventory {
             self.pending_parent_repairs.retain(|id| self.repaired_parents.contains_key(id));
             self.deferred_parents.retain(|id, _| self.items.contains_key(id));
         }
+        for id in &stale {
+            if let Some(folder) = self.folders.get_mut(id) {
+                folder.state = FetchState::Unknown;
+            }
+            self.request(*id);
+        }
+        stale
     }
 
     /// Items fetched by id (FetchInventory2), listed in their folder when
@@ -384,6 +486,27 @@ impl Inventory {
                 f.items.insert(at, it.id);
             }
             self.items.insert(it.id, it);
+        }
+    }
+
+    /// A BulkUpdateInventory (a delivery, a gift, an unpack): applied like
+    /// any server change, then each of its folders not read yet is read
+    /// (#3025). The Legacy Viewer dates a folder by its loaded children
+    /// (llfolderviewmodelinventory.cpp) and, in
+    /// LLInventoryModel::processBulkUpdateInventory, only fetches a known
+    /// folder whose version is unknown or a new folder's parent, so a
+    /// delivered folder waits for an expand there before it sorts by date.
+    /// Aurora reads the delivered folder at once so that it sorts with its
+    /// contents: one FetchInventoryDescendents2 per delivered folder, a
+    /// small and deliberate difference in what is sent. Folders created,
+    /// moved or recovered through `server_updated` are not read.
+    pub fn bulk_updated(&mut self, folders: Vec<InvFolder>, items: Vec<InvItem>) {
+        let delivered: Vec<Uuid> = folders.iter().map(|folder| folder.id).collect();
+        self.server_updated(folders, items);
+        for id in delivered {
+            if self.folders.get(&id).is_some_and(|f| !matches!(f.state, FetchState::Fetched)) {
+                self.request(id);
+            }
         }
     }
 
@@ -493,6 +616,95 @@ impl Inventory {
         }
     }
 
+    /// Leaves out of an item read the broken links' originals: confirmed
+    /// gone (never asked again this session), or unreadable after their
+    /// attempts (asked again after [`ITEM_GIVE_UP`]: a server busy for a
+    /// while never marks a real item broken for the session).
+    pub fn drop_broken(&mut self, items: &mut Vec<Uuid>) {
+        if self.missing_items.is_empty() {
+            return;
+        }
+        self.expire_given_up(std::time::Instant::now());
+        items.retain(|id| !self.broken(id));
+    }
+
+    /// The items given up past [`ITEM_GIVE_UP`] are no longer broken links:
+    /// the outfits and attachments that need them ask again (the
+    /// generation changes, so their views look again). Called every frame
+    /// by the inventory's pump; nothing to do most of the time.
+    pub fn expire_given_up(&mut self, now: std::time::Instant) {
+        if self.gave_up_at.is_empty() {
+            return;
+        }
+        let expired: Vec<Uuid> = self
+            .gave_up_at
+            .iter()
+            .filter(|(_, at)| now.saturating_duration_since(**at) >= ITEM_GIVE_UP)
+            .map(|(id, _)| *id)
+            .collect();
+        if expired.is_empty() {
+            return;
+        }
+        for id in expired {
+            self.gave_up_at.remove(&id);
+            *self.give_up_rounds.entry(id).or_insert(0) += 1;
+            self.item_failures.remove(&id);
+            if !self.confirmed_missing.contains(&id) {
+                self.missing_items.remove(&id);
+                // (a retry frees it from the views' list of reads already
+                // asked, so the outfit that needs it reads it again)
+                self.item_retries.insert(id);
+            }
+        }
+        self.generation += 1;
+    }
+
+    /// Leaves out of an item read the broken links' originals and the
+    /// items not in the inventory already on their way (asked again by
+    /// another window or the outfit code before the first answer came: on a
+    /// huge inventory the same dead link was read twenty times at once, each
+    /// failure counted as an attempt), and marks those as on their way. An
+    /// item already in the inventory is a refresh (a script saved, a gesture
+    /// or an AO item changed): it is always sent, as on main (two such reads
+    /// are sent apart, so their replies may land in either order, as there).
+    /// A read never answered frees its item after [`ITEM_READ_DEADLINE`]
+    /// for each chunk up to its own.
+    pub fn claim_item_reads(&mut self, items: &mut Vec<Uuid>, attachment: bool, now: std::time::Instant) {
+        self.drop_broken(items);
+        let mut seen = HashSet::new();
+        items.retain(|id| seen.insert(*id) && (self.items.contains_key(id) || !self.item_reading(*id, attachment, now)));
+        let chunk = aurora_net::inventory::ais::ITEM_CHUNK;
+        for (index, id) in items.iter().enumerate() {
+            if !self.items.contains_key(id) {
+                let chunks = u32::try_from(index / chunk + 1).unwrap_or(u32::MAX);
+                self.items_reading
+                    .insert((*id, attachment), now + ITEM_READ_DEADLINE.saturating_mul(chunks));
+            }
+        }
+    }
+
+    /// A read of this item is on its way (and not past its deadline).
+    pub fn item_reading(&self, id: Uuid, attachment: bool, now: std::time::Instant) -> bool {
+        self.items_reading.get(&(id, attachment)).is_some_and(|until| now < *until)
+    }
+
+    /// These items' reads of this kind answered (or failed): they may be
+    /// asked again. The other kind's claim stays: its read is its own.
+    pub fn items_answered(&mut self, ids: &[Uuid], attachment: bool) {
+        for id in ids {
+            self.items_reading.remove(&(*id, attachment));
+        }
+    }
+
+    /// Links' originals unreadable after their attempts, not answered gone
+    /// (Dev Toolbox N4); the confirmed-gone ones are counted apart.
+    pub fn unreadable_items(&self) -> usize {
+        self.missing_items
+            .iter()
+            .filter(|id| !self.confirmed_missing.contains(id) && !self.items.contains_key(id))
+            .count()
+    }
+
     /// A broken link's original: confirmed gone, and not received since.
     pub fn broken(&self, id: &Uuid) -> bool {
         self.missing_items.contains(id) && !self.items.contains_key(id)
@@ -502,6 +714,7 @@ impl Inventory {
     pub fn items_missing(&mut self, ids: Vec<Uuid>) {
         self.generation += 1;
         for id in ids {
+            self.confirmed_missing.insert(id);
             self.item_failures.remove(&id);
             self.item_retries.remove(&id);
             self.missing_items.insert(id);
@@ -511,16 +724,36 @@ impl Inventory {
     /// These item reads failed: asked again, up to `ITEM_FETCH_ATTEMPTS`.
     pub fn items_failed(&mut self, ids: &[Uuid]) {
         self.generation += 1;
+        // (one line a batch, never one a link: hundreds of dead links pushed
+        // everything else out of the last warnings)
+        let mut broken = 0;
+        let mut first = None;
         for id in ids {
+            // (already a broken link: a late copy of its read counts nothing)
+            if self.missing_items.contains(id) {
+                continue;
+            }
             let attempts = self.item_failures.entry(*id).or_insert(0);
             *attempts += 1;
             if *attempts >= ITEM_FETCH_ATTEMPTS {
-                log::warn!("inventory item {id} still unreadable after {attempts} attempts: treated as a broken link");
+                broken += 1;
+                first.get_or_insert(*id);
                 self.item_retries.remove(id);
                 self.missing_items.insert(*id);
+                // (read again after a pause, a few rounds a session; after
+                // the last it stays broken)
+                if self.give_up_rounds.get(id).copied().unwrap_or(0) < ITEM_GIVE_UP_ROUNDS {
+                    self.gave_up_at.insert(*id, std::time::Instant::now());
+                }
             } else {
                 self.item_retries.insert(*id);
             }
+        }
+        if let Some(first) = first {
+            log::warn!(
+                "{broken} inventory items still unreadable after {ITEM_FETCH_ATTEMPTS} attempts: treated as broken links ({} in all; first {first})",
+                self.missing_items.len()
+            );
         }
     }
 
@@ -530,10 +763,15 @@ impl Inventory {
     }
 
     pub fn failed(&mut self, folders: &[Uuid]) {
+        self.failed_at_time(folders, std::time::Instant::now());
+    }
+
+    fn failed_at_time(&mut self, folders: &[Uuid], now: std::time::Instant) {
         self.generation += 1;
         for id in folders {
             if let Some(f) = self.folders.get_mut(id) {
                 f.state = FetchState::Failed;
+                self.failed_at.insert(*id, now);
             }
         }
     }
@@ -597,7 +835,12 @@ impl Inventory {
         use aurora_llsd::llsd_map;
         let mut folders = Vec::new();
         let mut items = Vec::new();
-        for f in self.folders.values().filter(|f| f.state == FetchState::Fetched) {
+        let excluded = self.outgoing.uncached_folders(&self.items);
+        for f in self
+            .folders
+            .values()
+            .filter(|f| f.state == FetchState::Fetched && !excluded.contains(&f.info.id))
+        {
             folders.push(llsd_map! {
                 "id" => f.info.id,
                 "parent" => f.info.parent,
@@ -634,21 +877,28 @@ impl Inventory {
                 }
             }
         }
-        if folders.is_empty() {
+        if folders.is_empty() && excluded.is_empty() {
             return;
         }
         let doc = llsd_map! {
-            "version" => 3,
+            "version" => CACHE_VERSION,
             "folders" => Llsd::Array(folders),
             "items" => Llsd::Array(items),
         };
-        if let Some(dir) = path.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        let tmp = path.with_extension("tmp");
-        if crate::cache::write(&tmp, &aurora_llsd::to_binary(&doc)).is_ok() {
-            let _ = std::fs::rename(&tmp, path);
-        }
+        // The document is the snapshot; its encoding, sealing and writing
+        // go to a save thread (saves.rs): a large inventory on a slow disk
+        // held the frame for over a minute at exit (#3466). The exit waits
+        // for it with a bound, and the next login's read waits for it.
+        let path = path.to_path_buf();
+        crate::saves::replace(path.clone(), move || {
+            if let Some(dir) = path.parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            let tmp = path.with_extension("tmp");
+            if crate::cache::write(&tmp, &aurora_llsd::to_binary(&doc)).is_ok() {
+                let _ = std::fs::rename(&tmp, &path);
+            }
+        });
     }
 
     /// Restore cached folders whose version still matches the login
@@ -659,8 +909,12 @@ impl Inventory {
     /// to the fetch.
     pub fn apply_cache(&mut self, cache: CachedInventory) -> usize {
         let touched: HashSet<Uuid> = self.items.values().map(|it| it.parent).collect();
+        let excluded = self.outgoing.uncached_folders(&self.items);
         let mut valid = 0;
         for c in cache.folders {
+            if excluded.contains(&c.id) {
+                continue;
+            }
             let Some(cur) = self.folders.get_mut(&c.id) else {
                 continue;
             };
@@ -741,11 +995,18 @@ pub struct CachedInventory {
 /// the file, its LLSD document, the items and their order in each folder,
 /// as `sort_children` gives it.
 pub fn read_cache(path: &std::path::Path) -> Option<CachedInventory> {
+    read_cache_with_timeout(path, std::time::Duration::from_secs(10))
+}
+
+fn read_cache_with_timeout(path: &std::path::Path, timeout: std::time::Duration) -> Option<CachedInventory> {
+    // A slow logout save may still be replacing a snapshot with different
+    // no-copy originals. The login can fetch these folders from the server.
+    if !crate::saves::wait_for(path, timeout) {
+        return None;
+    }
     let bytes = crate::cache::read_touch(path).ok()?;
     let (doc, _) = aurora_llsd::from_binary_local(&bytes).ok()?;
-    // Older files were populated by legacy reads that could discard other
-    // favorites. Reload those folders through AIS once, even at equal versions.
-    if doc["version"].as_i32() != 3 {
+    if doc["version"].as_i32() != CACHE_VERSION {
         return None;
     }
     let mut by_parent: HashMap<Uuid, Vec<InvItem>> = HashMap::new();
@@ -1069,6 +1330,62 @@ mod tests {
             assert_eq!(inv.folders[&child].items, vec![copied.id]);
             assert!(inv.items.contains_key(&Uuid::from_u128(723)), "copy keeps the original");
         }
+    }
+
+    /// #3025: a folder delivered by BulkUpdate must be fetched so its date
+    /// (newest descendant) sorts it with its contents, without waiting for expand.
+    #[test]
+    fn bulk_updated_folders_are_queued_for_fetch() {
+        let mut inv = fixture();
+        let id = Uuid::from_u128(9801);
+        inv.bulk_updated(
+            vec![InvFolder {
+                id,
+                parent: inv.root,
+                name: "Gift folder".into(),
+                type_default: -1,
+                version: -1,
+                ..Default::default()
+            }],
+            Vec::new(),
+        );
+        assert_eq!(inv.folders[&id].state, FetchState::Fetching);
+        assert!(
+            inv.queue.iter().any(|(queued, _)| *queued == id),
+            "descendent fetch queued: {:?}",
+            inv.queue
+        );
+    }
+
+    /// Only a BulkUpdateInventory reads its folders: a folder AIS just
+    /// created, one announced during a copy and a folder moved elsewhere
+    /// send no FetchInventoryDescendents2, as in the Legacy Viewer.
+    #[test]
+    fn created_and_moved_folders_are_not_queued_for_fetch() {
+        let mut inv = fixture();
+        let folder = |id: u128, parent: Uuid| InvFolder {
+            id: Uuid::from_u128(id),
+            parent,
+            name: format!("Folder {id}"),
+            type_default: -1,
+            version: 1,
+            ..Default::default()
+        };
+        let root = inv.root;
+        inv.created_folders(vec![folder(9811, root)]);
+        assert!(inv.queue.is_empty(), "created folder: {:?}", inv.queue);
+        assert_eq!(inv.folders[&Uuid::from_u128(9811)].state, FetchState::Fetched);
+
+        // copied without AIS (announce_folder) and never opened
+        inv.server_updated(vec![folder(9812, root)], Vec::new());
+        assert!(inv.queue.is_empty(), "announced folder: {:?}", inv.queue);
+
+        // moved under another folder
+        let mut moved = folder(9812, Uuid::from_u128(9811));
+        moved.version = -1;
+        inv.server_updated(vec![moved], Vec::new());
+        assert!(inv.queue.is_empty(), "moved folder: {:?}", inv.queue);
+        assert!(inv.folders[&Uuid::from_u128(9811)].children.contains(&Uuid::from_u128(9812)));
     }
 
     #[test]

@@ -21,6 +21,20 @@ pub const NO_ROTATE_ANIMS: [Uuid; 3] = [
     Uuid::from_u128(0x3da1d753_028a_5446_24f3_9c9b856d9422),
 ];
 
+/// A seated avatar turned on purpose (Face nearest avatar, the Compass): the
+/// rotation it is drawn with, relative to its seat, until the simulator
+/// reports its own. Standing avatars use `Body` instead.
+#[derive(Debug, Clone, Copy)]
+pub struct SeatSnap {
+    /// The seat the snap was made on.
+    pub parent_id: u32,
+    /// The avatar's reported rotation at the time: a new report differs,
+    /// and the simulator's rotation takes over.
+    pub reported: Quat,
+    /// The drawn rotation relative to the seat.
+    pub local: Quat,
+}
+
 const PELVIS_LAG_FLYING: f32 = 0.22;
 const PELVIS_LAG_WALKING: f32 = 0.4;
 const PELVIS_LAG_MOUSELOOK: f32 = 0.15;
@@ -29,9 +43,6 @@ const PELVIS_LAG_MOUSELOOK: f32 = 0.15;
 const TURN_RATE_DELTA: f32 = 0.0019;
 const SHORTEST_LAG: f32 = 0.0001;
 const MOUSELOOK_PELVIS_FOLLOW_FACTOR: f32 = 0.5;
-/// AvatarRotateThresholdSlow / Fast (degrees).
-const ROTATE_THRESHOLD_SLOW: f32 = 60.0;
-const ROTATE_THRESHOLD_FAST: f32 = 2.0;
 
 fn clamp_rescale(x: f32, in0: f32, in1: f32, out0: f32, out1: f32) -> f32 {
     let t = ((x - in0) / (in1 - in0)).clamp(0.0, 1.0);
@@ -58,6 +69,9 @@ pub struct Input {
     /// How much faster the body turns while walking or standing, 0 to 100 %
     /// (FSAvatarTurnSpeed, in Debug Settings); every avatar drawn.
     pub turn_speed: f32,
+    /// AvatarRotateThresholdSlow / Fast, in degrees.
+    pub rotate_threshold_slow: f32,
+    pub rotate_threshold_fast: f32,
 }
 
 /// The walking and standing lag of the turn (s): PELVIS_LAG_WALKING,
@@ -88,6 +102,17 @@ impl Body {
             rotation: Quat::from_rotation_z(fwd.y.atan2(fwd.x)),
             turning: false,
             speed_accum: 0.0,
+        }
+    }
+
+    /// Face `prim_dir` at once, without the lag nor a turn animation
+    /// (FSAvatarAlignBase::snapAvatarBody / snapRemoteAvatarBody: mRoot set
+    /// to the new heading).
+    pub fn snap(&mut self, prim_dir: Vec3) {
+        let fwd = flat(prim_dir);
+        if fwd != Vec3::ZERO {
+            self.rotation = Quat::from_rotation_z(fwd.y.atan2(fwd.x));
+            self.turning = false;
         }
     }
 
@@ -122,7 +147,7 @@ impl Body {
             }
         }
         let pelvis = self.rotation * Vec3::X;
-        let mut threshold = clamp_rescale(speed, 0.1, 1.0, ROTATE_THRESHOLD_SLOW, ROTATE_THRESHOLD_FAST);
+        let mut threshold = clamp_rescale(speed, 0.1, 1.0, i.rotate_threshold_slow, i.rotate_threshold_fast);
         if i.mouselook_at.is_some() {
             threshold *= MOUSELOOK_PELVIS_FOLLOW_FACTOR;
         }
@@ -189,6 +214,8 @@ mod tests {
             flying: false,
             step_back: false,
             turn_speed: 0.0,
+            rotate_threshold_slow: 60.0,
+            rotate_threshold_fast: 2.0,
         };
         let mut b = Body::new(Vec3::X);
         // standing: a 30° camera turn does not move the body
@@ -215,6 +242,8 @@ mod tests {
             flying: false,
             step_back: false,
             turn_speed: 0.0,
+            rotate_threshold_slow: 60.0,
+            rotate_threshold_fast: 2.0,
         };
         for _ in 0..240 {
             b.update(&back, 1.0 / 60.0);
@@ -250,6 +279,66 @@ mod tests {
     }
 
     #[test]
+    fn configurable_slow_rotation_threshold_preserves_defaults_and_allows_precise_turns() {
+        let mut body = Body::new(Vec3::X);
+        let mut input = Input {
+            prim_dir: Quat::from_rotation_z(30.0_f32.to_radians()) * Vec3::X,
+            velocity: Vec3::ZERO,
+            in_air: false,
+            mouselook_at: None,
+            flying: false,
+            step_back: false,
+            turn_speed: 0.0,
+            rotate_threshold_slow: 60.0,
+            rotate_threshold_fast: 2.0,
+        };
+
+        for _ in 0..120 {
+            assert_eq!(body.update(&input, 1.0 / 60.0), 0);
+        }
+        assert!(yaw(body.rotation).abs() < 0.5);
+
+        input.rotate_threshold_slow = 4.0;
+        let mut turned = false;
+        for _ in 0..120 {
+            turned |= body.update(&input, 1.0 / 60.0) != 0;
+        }
+
+        assert!(turned, "the custom threshold should initiate a turn");
+        assert!(yaw(body.rotation) > 20.0, "{}", yaw(body.rotation));
+    }
+
+    #[test]
+    fn configurable_fast_rotation_threshold_changes_moving_avatar_turns() {
+        let mut body = Body::new(Vec3::X);
+        let mut input = Input {
+            prim_dir: Vec3::X,
+            velocity: Vec3::Y * 2.0,
+            in_air: false,
+            mouselook_at: None,
+            flying: false,
+            step_back: false,
+            turn_speed: 0.0,
+            rotate_threshold_slow: 60.0,
+            rotate_threshold_fast: 150.0,
+        };
+
+        for _ in 0..120 {
+            assert_eq!(body.update(&input, 1.0 / 60.0), 0);
+        }
+        assert!(yaw(body.rotation).abs() < 0.5);
+
+        input.rotate_threshold_fast = 20.0;
+        let mut turned = false;
+        for _ in 0..120 {
+            turned |= body.update(&input, 1.0 / 60.0) != 0;
+        }
+
+        assert!(turned);
+        assert!(yaw(body.rotation) > 70.0, "{}", yaw(body.rotation));
+    }
+
+    #[test]
     fn turn_speed_shortens_the_walking_lag_like_the_legacy_viewer() {
         assert_eq!(walking_lag(0.0), PELVIS_LAG_WALKING);
         assert!((walking_lag(100.0) - 0.21).abs() < 1e-6);
@@ -269,6 +358,8 @@ mod tests {
                 flying: false,
                 step_back: false,
                 turn_speed: speed,
+                rotate_threshold_slow: 60.0,
+                rotate_threshold_fast: 2.0,
             };
             b.update(&face, 0.05);
             yaw(b.rotation)

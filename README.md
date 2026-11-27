@@ -21,7 +21,7 @@ A Vulkan renderer, a clean interface, and the Second Life you already know.
 
 <sub>This software is not provided or supported by Linden Lab, the makers of Second Life.</sub>
 
-[Why Aurora](#why-aurora) · [Creator tools](#creator-tools) · [Performance](#performance) · [Features](#what-works-today) · [Roadmap](#roadmap) · [Using Aurora](#using-aurora) · [Build](#build) · [Contributing](#contributing)
+[Why Aurora](#why-aurora) · [Creator tools](#creator-tools) · [Performance](#performance) · [Features](#what-works-today) · [Roadmap](#roadmap) · [Using Aurora](#using-aurora) · [Build](#build) · [Contributing](#contributing) · [Code signing policy](https://aurora-viewer.org/code-signing/)
 
 </div>
 
@@ -111,37 +111,38 @@ while rethinking the user interface.
   </tr>
 </table>
 
-### New in 0.9.4 <img src="docs/readme/pill-new.svg" alt="New" height="18" align="absmiddle">
+### New in 0.9.13 <img src="docs/readme/pill-new.svg" alt="New" height="18" align="absmiddle">
 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <h3>Debug settings, like the Legacy Viewer</h3>
-      Every setting by name in one window, from the toolbar or
-      Ctrl+Alt+Shift+S: search the names and descriptions, see the ones you
-      changed, and reset any of them to its default.
+      <h3>Ray tracing: Deluxe (RT)</h3>
+      On cards with ray tracing, the Deluxe (RT) level traces the shadows
+      of the sun, the moon and the lamps, exact where things touch, with
+      coloured glass tinting the light, and lets the light bounce into
+      rooms. A ray tracing quality fits it to smaller cards.
     </td>
     <td width="50%" valign="top">
-      <h3>More of the Legacy Viewer's options</h3>
-      Build preferences for new prims, a progressive draw distance, the
-      Trees detail, large surface protection, particles from worn objects,
-      camera smoothing up to 300 and a limit for the chat lines above the
-      chat bar.
+      <h3>Windows outside the viewer</h3>
+      Send Conversations, the inventory or any other window to a screen
+      of its own and bring it back; drag and drop still works between
+      them. Voice chat can play on its own output device.
     </td>
   </tr>
   <tr>
     <td valign="top">
-      <h3>A fuller world</h3>
-      Neighbouring regions appear at your draw distance, objects no longer
-      vanish at some camera angles, and the world comes back by itself
-      after video memory was full at login. Media screens in busy regions
-      load again.
+      <h3>A new LiveMesh and photo filters</h3>
+      LiveMesh is rebuilt with live thumbnails, Quick look, a weight bend
+      test and an Undo button. Photo filters become cards you drag, with
+      a catalogue that previews each effect, and Phototools gets its
+      Light and DoF &amp; glow tabs.
     </td>
     <td valign="top">
-      <h3>Calls, music and chat</h3>
-      Private calls stay connected across teleports, parcel music no longer
-      cuts out while you cam around, Ctrl+Tab cycles the conversations, and
-      the Japanese IME shows the active conversion segment.
+      <h3>Faster textures, a rounder world</h3>
+      aurora-j2k, a JPEG 2000 decoder written in Rust, decodes textures
+      faster. Soft sun shadows and planet curvature are new options, a
+      Mini AO window stays open, and updates install only when signed by
+      the Release workflow.
     </td>
   </tr>
 </table>
@@ -220,8 +221,10 @@ are planned or in progress: they are not in the viewer yet.
   fences and hair stay solid in the distance, and textures load as finely as
   you expect close to the camera.
 - **Graphics levels matched to your machine**, chosen at first launch: GTAO
-  from Medium up, contact shadows from High, screen-space indirect light
-  (experimental) in Deluxe with a 192 m draw distance; per-section resets
+  from Medium up, contact shadows from High, and Deluxe (RT): High with the
+  sun's and the lamps' shadows and the indirect light ray-traced, on the
+  cards with ray queries, at a ray tracing quality of your choice (Low,
+  Medium, High) that keeps every traced effect on; per-section resets
   when you want to start over. Save your own settings as named graphics
   profiles and switch between them from Preferences or the FPS counter.
 - **HDR, or the older look**: the Legacy Viewer's HDR and Emissive switch,
@@ -358,7 +361,7 @@ are planned or in progress: they are not in the viewer yet.
 
 ### Creator tools
 
-- **LiveMesh**: see your Blender mesh in the viewer while you edit it, with
+- **LiveMesh**: see your Blender or Maya mesh in the viewer while you edit it, with
   nothing uploaded. Rigged meshes follow your own avatar, with their weights,
   shape keys and materials; static meshes and linksets become local objects
   you can place on the ground, move, rotate, resize, attach to your body or
@@ -374,8 +377,8 @@ are planned or in progress: they are not in the viewer yet.
   whole-pose actions. Save poses to a library, export them as BVH or import
   them as an animation, with Ctrl+Z / Ctrl+Y as you go. The pose is seen by
   you only ([details](docs/POSER.md)).
-- **An IK workbench**: reusable pose projects that keep chosen bones on their
-  targets, with contacts that compatible viewers apply to nearby avatars
+- **An IK workbench**: pose your own skeleton bone by bone, with IK chains,
+  limb holds and animation layers, as a base for the animation creator
   ([details](docs/IK_EDIT.md)).
 - **Build tools that stay out of the way**: a compact editor you can arrange
   yourself, larger material previews for Blinn-Phong and PBR, a live preview
@@ -415,7 +418,9 @@ are planned or in progress: they are not in the viewer yet.
 - **Borderless fullscreen**: Alt+Enter fills the screen without a title bar
   or borders, at once and without a restart, and gives the window back
   exactly as it was (Preferences › Graphics).
-- **In English, French and Japanese (日本語)**: the whole interface follows
+- **In fifteen languages with seventeen regional catalogues** (American, British and Australian English, French, Japanese, German, Spanish,
+  Italian, Brazilian and European Portuguese, Polish, Russian, Ukrainian,
+  Turkish, Norwegian Bokmål, Simplified and Traditional Chinese): the interface follows
   your system language or your choice, applied at once. Japanese uses Second
   Life's official Japanese terms (インベントリ, 区画, フレンド…), Japanese
   interface fonts and Japanese dates ([details](#language)).
@@ -444,8 +449,9 @@ are planned or in progress: they are not in the viewer yet.
 - **Write with ease**: a spell checker with suggestions in the chat bars,
   conversations and notecards, auto-replace (`brb`…) if you like, `@` to
   mention someone in the conversation, names completed as you type, and `/`
-  in nearby chat to find and play a gesture. Ctrl+Shift+Enter starts a new
-  line, and pasted paragraphs keep their shape. Arabic and Hebrew read right
+  in nearby chat to find and play a gesture. Shift+Enter starts a new
+  line, and pasted paragraphs keep their shape; the chat's keys can be
+  changed in Preferences › Controls › Shortcuts. Arabic and Hebrew read right
   to left, in name tags, bubbles, floating text and conversations. A long
   IM goes out as several messages instead of being cut off.
 - **Messages that matter, in front of you**: a message an estate manager
@@ -467,7 +473,7 @@ are planned or in progress: they are not in the viewer yet.
   Legacy layout one click away in Preferences › Aurora (bars, people,
   chat lines, inventory, places, search, About Land, Region / Estate, photos,
   controls and more).
-- **Arrange it your way**: customizable bottom, left and right toolbars,
+- **Arrange it your way**: customizable top, bottom, left and right toolbars,
   favourites in a menu, row or dock, and windows that move over the whole
   screen. The Legacy Viewer's toolbar buttons are all there: Quick
   preferences, a built-in web browser on a home page you choose, the voice
@@ -542,7 +548,7 @@ are planned or in progress: they are not in the viewer yet.
   credits.
 - **Made for every eye**: an Accessibility page gathers the settings that
   help (interface scale, text size up to twice the normal size, reduce
-  motion, sounds…), with a button on the login screen. A high-contrast palette, the OpenDyslexic font, and
+  motion, sounds…), with a button on the login screen. A high-contrast palette, a setting that turns off the glass, the OpenDyslexic font, and
   volume sliders that follow your ear are a click away, and the chat can
   have a text size of its own.
 - **Your colours**: pick the accent, window background and text colours in
@@ -556,7 +562,7 @@ are planned or in progress: they are not in the viewer yet.
   downloads it in the background, checks it against its published hash,
   installs it and restarts your session, and rolls back if anything goes
   wrong. Before you agree, it tells you whether your cache and settings are
-  kept. On Linux and macOS it shows the new release instead
+  kept. On macOS it shows the new release instead
   ([details](docs/UPDATES.md)).
 
 ### Only in Aurora
@@ -574,10 +580,9 @@ are planned or in progress: they are not in the viewer yet.
 - **Portals to walk through**: open a portal to a place, drop a landmark
   into the world, or drag a place there from Favorites, Places, the teleport
   history or search results, and walk, run or fly through it to teleport.
-  A portal opens where you may build, like rezzing an object. Other Aurora
-  users see it too: your friends by default, everyone if you choose, and a
-  portal that appears on someone never pulls them in. The portal back home
-  is yours alone on land where you may not build.
+  A portal opens where you may build, like rezzing an object, and only you
+  see it; a portal that opens on you never pulls you in. The way back opens
+  behind you when you arrive.
 - **Just your parcel, if you like**: hide what stands outside the current
   parcel, everywhere or only on the parcels you list, with exceptions that
   stay visible and options for neighbouring parcels of the same owner or
@@ -649,8 +654,12 @@ frame on your own PC.
   PBR and legacy materials, shadows, GTAO ambient occlusion with specular
   occlusion, sun contact shadows, specular anti-aliasing, reflection probes,
   water, glow, particles, rainbows, 22° halos and depth of field;
-  screen-space indirect light, GPU occlusion and enhanced water effects (all
-  experimental), graphics presets and per-section resets; headset viewing
+  ray-traced sun and local light shadows and indirect light (the Deluxe
+  (RT) graphics level, on the cards with ray queries; the shadow maps
+  elsewhere); screen-space indirect light,
+  GPU occlusion, enhanced water effects and ray-traced indirect light and
+  reflections (all experimental),
+  graphics presets and per-section resets; headset viewing
   through OpenXR (experimental, view only).
 - **Avatars** — skeleton and Bento animations blended like the Legacy Viewer,
   server bakes, rigged mesh, complexity limits, impostors and look-at;
@@ -669,7 +678,7 @@ frame on your own PC.
   to the body/HUD.
 - **Posing** — a [poser](docs/POSER.md) for yourself, your animesh and
   consenting nearby avatars, with a pose library, BVH export and animation
-  import; an [IK workbench](docs/IK_EDIT.md) with shared contact profiles.
+  import; an [IK workbench](docs/IK_EDIT.md) for local skeleton posing.
 - **World** — prims, sculpts, mesh with LOD, classic and PBR terrain, EEP environment,
   sky, water and day-cycle editors, experience environments, world sounds
   with occlusion, headphone HRTF and room reverb (experimental), parcel
@@ -677,8 +686,8 @@ frame on your own PC.
   on prims, with Aurora's media plugins pack, downloaded once you agree; an area search
   for the objects rezzed around you, with filters and sortable results;
   a Sound Explorer with local previews, source camera and sound blocking;
-  walk-through portals shared with other Aurora users, with friend/group
-  access and protection against portals appearing on top of someone;
+  walk-through portals of your own, with a way back and protection against
+  a portal opening on top of you;
   parcel content isolation, a grid status window, and a live particle
   editor; OpenSim grids and the Hypergrid, with a grid manager, avatars
   baked by the viewer where the grid does not bake, large regions, and
@@ -724,17 +733,17 @@ frame on your own PC.
   tools, folder colours, outfit backups to JSON, dedicated Marketplace and
   listings windows, compact import launcher and per-type editors; sound
   waveform previews, trimming, gain and splitting.
-- **Interface** — in English, French and Japanese; flat Aurora theme, Inter font, Tabler icons, glass island bars,
-  customizable bottom and side toolbars, classic layout options, Aurora
+- **Interface** — in fifteen languages, flat Aurora theme, Inter font, Tabler icons, glass island bars,
+  customizable toolbars on all four edges and a rearrangeable main menu, classic layout options, Aurora
   search and Places windows, mini-map, world map, preferences and debug
   overlays; an immersive mode that keeps only the chat; Aurora team and
   Linden Lab marks; double-click walk / run / teleport and content-rating controls
   for places and teleport offers; an Accessibility page, a high-contrast
-  palette, custom interface colours, text up to twice the size and the
+  palette, a setting that turns off the glass, custom interface colours, text up to twice the size and the
   OpenDyslexic font.
-- **Windows updates** — release checks, cancellable verified downloads,
-  installation and restart with rollback. The prompt explains whether cache
-  and settings will be preserved, migrated or reset.
+- **Updates in place** (Windows and Linux) — release checks, cancellable
+  verified downloads, installation and restart with rollback. The prompt
+  explains whether cache and settings will be preserved, migrated or reset.
 
 Voice calls, photo uploads, environment saving and several group / region
 operations are implemented and tested in the offline demo, but still need
@@ -748,8 +757,6 @@ completed work from features awaiting that validation.
 
 - Depth exports and 360° snapshots.
 - Automatic updates on macOS (the viewer points to the new release).
-- Automatic installation of updates on Linux (the viewer points to the
-  new release instead).
 
 Voice is WebRTC only; Vivox is not supported.
 
@@ -788,18 +795,30 @@ Manager) and, when you tick it, a 30-day MFA authorization.
 
 ### Language
 
-The interface is available in English, French and Japanese (日本語): system
-language detection, a choice saved in Preferences and applied at once. The
-Japanese translation covers every message, with the official Second Life
+The viewer ships American, British and Australian English, French, Japanese (日本語), Simplified Chinese
+(简体中文), Traditional Chinese (繁體中文), Russian (Русский), German (Deutsch),
+Brazilian Portuguese (Português (Brasil)), Spanish (Español), Italian
+(Italiano), Polish (Polski), Turkish (Türkçe), European Portuguese (Português
+(Portugal)), Norwegian Bokmål (Norsk bokmål) and Ukrainian (Українська). It
+detects the system language
+by default. A choice saved in Preferences applies at once. English (US),
+English (UK) and English (AU) are available independently. New Zealand,
+Ireland, South Africa, India, Singapore, Hong Kong, Malaysia and Malta use
+British English by default; Canada uses American English. Existing explicit
+language choices are retained. Users following their system language may
+automatically switch to British or Australian English after updating.
+The Japanese translation covers every message, with the official Second Life
 Japanese terms; it draws with Japanese interface fonts (Meiryo UI, Yu Gothic
-UI or MS UI Gothic) and writes dates the Japanese way. Fluent catalogues make
-it possible to add a language; see [the translation guide](docs/TRANSLATING.md).
+UI or MS UI Gothic) and writes dates the Japanese way. The other languages
+use the Second Life terms of the Legacy Viewer's interface in that language,
+and Chinese draws with the system's Chinese fonts (Microsoft YaHei or
+Microsoft JhengHei on Windows). Fluent catalogues make it possible to add a
+language; see [the translation guide](docs/TRANSLATING.md).
 
-The viewer first follows the language saved in **Preferences › Interface ›
-Language**, then the system's if "System language" is selected. English is
-the fallback. The change applies at once; the "Language visible to scripts"
-setting is on by default, like the Legacy Viewer. The translations are in
-`crates/aurora-i18n/locales/`.
+Find the language picker and the custom Fluent file option in
+**Preferences › Language and updates**. Untranslated messages appear in
+English. The "Language visible to scripts" setting is on by default, like
+the Legacy Viewer. The translations are in `crates/aurora-i18n/locales/`.
 
 ### Frame limiter
 
@@ -870,6 +889,14 @@ and wears the confirmed copy; Copy permission is required. **Cancel** restores
 the current server appearance. Closing a modified shape offers Save, Discard or
 Cancel. A shape without Modify is read-only and can only be copied unchanged;
 a modifiable no-copy shape can be saved in place.
+
+### Export your appearance XML
+
+Open **Appearance**, click the gear menu and choose **Export my appearance XML…**.
+Choose where to save `appearance.xml`. The option becomes available when your
+own appearance has loaded. The file uses the Legacy Viewer’s appearance XML
+format, including the shape parameters its wearable editor can import. It
+contains no texture or mesh files and does not change what you are wearing.
 
 ### Hover height
 
@@ -965,20 +992,152 @@ for block comments, and Tab / Shift+Tab to indent or outdent the selected
 lines. The arrows in the margin fold the blocks between braces; the Edit menu
 offers Collapse all / Expand all.
 
-### Toolbar buttons
+### Buttons and menus
 
-Right-click a toolbar and choose **Toolbar buttons…** to open the command
-catalogue. Drag buttons onto the bottom dock / bar or the left and right
-bars, between bars, or along a bar to reorder them. Empty side bars show
-drop zones while dragging a button. Right-click a button to remove it, or
-drop it back into the catalogue.
+Right-click a toolbar and choose the final **Customize interface** action to open the
+command catalogue. Drag a command or a submenu from the Aurora menu to the top,
+bottom, left or right bar. Drag along a bar to reorder buttons, between bars to
+move them, or away from destinations to remove them. The floating preview shows
+a trash badge before release; dropping outside the viewer cancels. Empty bars show drop zones
+throughout interface editing. Drag inside the Aurora menu to reorder entries or move them into
+another submenu; a group cannot be moved inside itself.
 
-Each bar has its own alignment, button sizing and icon / label mode. The
-chosen buttons, order, styles and lock are shared by all accounts in the
-same local profile. The catalogue also restores the defaults or clears all
-bars. An older per-account layout is adopted from the first account used
-after the update. Preferences › Aurora offers the glass island and classic
-bar layouts, including where favourites appear.
+Choose **Customize interface** from the Aurora menu, add its toolbar button, or open
+**Buttons and menus** to enter the visual editing mode. The four bars remain
+translucent and outlined, including empty destinations. Glass groups are called
+blocks; drag their compact dotted handle to move every control together. The
+adjacent settings gear changes only that block. Both controls face inward and
+stay centered together. Clicking any control selects it for
+editing, including the native status and audio blocks. The inspector and common
+right-click menu can split a block before/after a control or merge neighboring
+blocks. **Done**, or closing the catalogue, restores normal button actions.
+
+While dragging, the button appears in the provisional toolbar layout, at its
+eventual position and with the destination block's icon/label mode. Prospective separator space
+is visible directly between glass blocks. Move away to see the button as a
+small floating glass panel. Touching a block adds it there; dropping nearby with
+space creates a separate block. Hovering saves nothing. Returning an isolated
+block to the same place changes nothing; a detached block move reuses its
+existing separator boundary and size instead of accumulating gaps.
+
+Pause briefly over the centre of a button, then release when its folder badge
+appears to create a drawer. Both ends of the button remain insertion zones;
+a quick crossing or release reorders it instead. You can also use **Fold block into
+drawer** on an existing block. Move its button to any bar. **Drawer settings**,
+available from its right-click menu or selection inspector, shows its name,
+toggle display and icon before the default display of its contents (icons, labels
+or both). Click its icon button to open the picker beside the window; it flips
+to the left near the right screen edge. Individual button overrides retain priority. Drop a button or a whole
+block onto the drawer icon to append it, even when the drawer is closed. The
+icon highlights before release; hovering does not open it or save changes.
+Clicking the drawer
+opens/closes an anchored panel that fits its contents. Icon rows align with the
+toggle and retain its block height; scrolling appears only
+when the contents exceed the available viewport. While editing, drag commands into the open drawer, reorder
+them there, or drag them back to a bar. **Fold group into drawer** converts a
+group in place. Right-click its button and choose **Unfold as a block** to restore
+its contents as a separate block, preserving order and the drawer's content default.
+Drawer buttons support the same icon/presentation overrides as other buttons.
+Custom drawers have one level; ordinary native submenus remain available inside.
+The panel stays open while using its controls and closes with its button or
+Escape. Contents, names and placements survive restart; opening is temporary.
+
+The entire top row is one toolbar. Navigation/SLURL, availability status, balance,
+clock, latency, FPS, network traffic, media, music, volume, notifications and
+conversation icons can each move independently to the bottom or sides.
+Existing account/system blocks split in place, keeping the saved edge and order.
+The top row starts at the left by default. Each block's gear offers its own
+left/center/right alignment (top/center/bottom on a side bar), independently of
+its neighbours and the bar default. Anchors use available space while preserving
+block order and minimum gaps; explicit Fill sizing and elastic gaps still apply.
+The alignment follows the block through moves, folding and unfolding, and restart.
+A hollow catalogue tile can be dragged to move its existing toolbar entry.
+Drag **Separator** above the button search, or choose **Add separator** from
+a bar's context menu, to add a line inside a block: vertical in a horizontal bar
+and horizontal on the sides. It can be moved or removed like a button.
+**Block spacing** adds the existing gap between glass blocks. Open the editor to
+reveal all gaps, including empty blocks.
+Right-click a gap and open **Block spacing settings** to set its size or
+enable **Fill available space**. Size becomes the minimum when stretching;
+multiple elastic separators share the space left by the controls. The same
+setting controls width in horizontal bars and height on the sides, follows the
+separator when moved, and is saved independently for each instance.
+The catalogue starts with **Main**, a compact selection of everyday buttons.
+**Advanced** contains specialist controls and detailed menu entries. Search finds
+commands in both sections. Conversation icons form a column on the left or right
+and a row at the top or bottom, keeping unread counters and the overflow menu.
+The catalogue groups commands by category, with a category filter and a search
+across labels. Known menu/toolbar aliases appear once. Drag the window's edges to
+resize it; the grid reflows. Block settings are available from each block's gear.
+
+Restore defaults keeps the integrated navigation/address field, groups the right-hand
+information together, places media, music and volume in their own block, and
+keeps notifications alone in the rightmost block.
+The nearby-chat input is a movable entry: edit the interface to drag its field
+or whole block to any edge or into a drawer. It participates in the bottom toolbar's
+ordinary layout even when it is the first block;
+input, drafts, keyboard focus and the width handle follow it.
+Restore defaults places its block at the left; explicit saved alignments stay in effect.
+
+The **Presets** section above the catalogue offers four complete arrangements, saved layouts bundled with the viewer (`crates/aurora-viewer/assets/toolbar/`):
+
+- **Aurora**: separate chat and conversation blocks and grouped tools at the bottom; at the top, the Interfaces block with Preferences and the quick import bar after Bug report, then navigation, status, audio and notifications.
+- **Aurora OldSchool**: the traditional bottom toolbar, the build tools and Places on the left, and the six localized text menus after the Aurora, Bug report and Interfaces blocks.
+- **Aurora Photographer**: Aurora's bars with the capture tools on the left (snapshot, photo roll, 360° capture, immersive mode, Director, second camera) and Phototools, quick preferences, environments and personal lighting at the top.
+- **Legacy**: the traditional arrangement and the existing global Legacy look, with the Interfaces block right of Bug report.
+
+**Save to a notecard…** asks for a name and creates a native inventory notecard in `#Aurora/Aurora Interfaces`, creating missing folders before uploading. The Saved interfaces list reads this inventory folder automatically alongside the built-in presets; selecting a card restores it through the same guarded loader. It uses indented technical JSON containing the four bars, blocks, drawers, menu placements, separators and button appearances. **Load from a notecard…** browses your inventory and restores a validated configuration after you select a copyable notecard. The required `base` field restores Aurora or Legacy bars along with their layout; loading succeeds without a confirmation message. Other window styles, graphics preferences and window positions stay in effect. Cards use schema version 2; older cards are not supported. A download never replaces a layout or base you changed or locked while it was loading.
+
+Choosing a preset replaces the current toolbar arrangement, even locked: the new
+one stays locked. Selecting a button no longer inserts actions into this window;
+use its context menu or its block's gear. Split before/after creates block gaps.
+
+Every toolbar control uses **Customize interface** as its final context-menu entry,
+including native status/audio controls and Report a bug. It selects the clicked
+control. Normal menus retain the control's actions and individual properties.
+Outside customization mode, choose Icon only, Label only, Icon and label, or Default
+directly in the context menu. **Change icon**, with a fixed small glyph, opens the icon picker beside
+the menu, flipping left when needed. The display choices, Change icon and
+**Customize interface** share the final group. A separator follows the four display
+choices; another separates any preceding button-specific actions. Default inherits
+the containing block or drawer. In customization mode, **Button appearance**
+stays immediately above **Customize interface**. A second right click without
+moving the pointer closes a toolbar context menu, even when it covers its button.
+The microphone keeps its native on/off glyph: presentation modes remain editable,
+but its icon cannot be customized.
+Live native
+readouts retain their content during editing; their functional gestures are intercepted.
+Click a gap between blocks in editing mode to open its individual size/stretch settings.
+Block/bar layout operations are grouped in customization mode. Split native controls
+show their own properties: clock settings on the clock, graphics presets on FPS,
+and status choices on status. Cross-field visibility switches stay in Preferences.
+Right-click the bug
+button for **Copy viewer version**, or the notification bell for **Do not disturb**.
+
+Each bar has its own alignment and defaults. A block's context menu or settings
+gear changes only that block's icon/label mode and Auto/Fixed/Fill sizing. Fixed
+equalizes its own buttons; Fill uses remaining space after elastic separators.
+Drag the handle to move a block.
+Right-click a
+button or menu entry and choose **Button appearance** to override just that
+command: icon, label, both, or the containing block/drawer/menu default. Individual
+button overrides retain priority. The menu entry and its toolbar copy have independent overrides. The searchable
+icon grid picks another bundled or skin icon; **Restore default icon** clears that override.
+The **Report a bug** button offers version copying from its context menu;
+customize its appearance from the catalogue.
+
+The **SLURL address bar** button opens its own field beside the button, towards
+the inside of the viewport. Reclicking closes it. Opening refreshes and selects
+the current SLURL for copying or entering a destination, independently of the
+integrated navigation field. **Ctrl+L** opens integrated navigation; this shortcut is configurable. Location
+privacy restrictions still apply.
+
+Buttons, menu order, presentation and lock are shared by all accounts in the same
+local profile. Lock prevents moving or removing commands and changing individual
+button overrides. The catalogue restores
+defaults or clears the bars. Existing per-account layouts are adopted from the
+first account used after the update. Preferences › Aurora offers glass islands
+and the classic bar layout, including where favourites appear.
 
 ### Inventory
 
@@ -1069,8 +1228,9 @@ an "Open folder" button: quit Aurora, then delete them and the viewer.
 
 ## Build
 
-Requirements: Windows 10/11, [Rust](https://rustup.rs) (stable, selected
-automatically by `rust-toolchain.toml`), a GPU with Vulkan support. On Linux,
+Requirements: Windows 10/11, [Rust](https://rustup.rs) (rustup installs by
+itself the version that `rust-toolchain.toml` names), a GPU with Vulkan
+support. On Linux,
 see [Installing on Linux](docs/LINUX.md#building-from-source); on macOS,
 [Installing on macOS](docs/MACOS.md#building-from-source).
 
@@ -1084,7 +1244,9 @@ git clone https://github.com/Aurora-Viewer/Aurora-Viewer aurora-viewer
 The tools check the environment and offer to **repair** it: they install
 whatever is missing (GitHub CLI, the Visual Studio C++ tools, Rust), clone
 the Legacy Viewer sources next to the repository, and download the Rust
-toolchain and the crates. Then, driven by the keyboard: release /
+toolchain and the crates. On Linux, `aurora-tools.sh` is the same tool (see
+[Installing on Linux](docs/LINUX.md#development-environment)). Then, driven by
+the keyboard: release /
 dev / debug viewers, demo, agents' tasks, disk, logs, live pull requests with
 Windows notifications, releases (see
 [HUMANS.md](HUMANS.md)).
@@ -1124,9 +1286,13 @@ clippy on a Mac, and the merge queue runs the tests and draws a demo frame on
 an Apple GPU.
 
 Preferences › Graphics › Smoothness offers a 50–100% **3D render scale**.
-At lower scales, the world is reconstructed with a nine-tap Catmull-Rom spatial
-upscaler; controls, HUDs and world labels retain the window's native resolution.
-Saved photos render at their requested resolution. The default remains 100%.
+At lower scales, the world is reconstructed and sharpened in one AMD CAS spatial
+upscaler (Sharpness 0, or HDR off, keeps a Catmull-Rom reconstruction); controls, HUDs and world labels retain the window's native resolution.
+Saved photos render at their requested resolution. Its **Match the display**
+switch follows the display's logical resolution instead (50% on a 2× display,
+67% on 1.5×), as the Legacy Viewer draws a Retina Mac's world: on by default
+on macOS, where a new profile also starts from the Legacy Viewer's Mac
+Mid-High values; elsewhere it is off and the default remains 100%.
 With AMD FSR 3.1 as the anti-aliasing, FSR's own mode (Native AA, Quality,
 Balanced, Performance, Ultra performance) takes the render scale's place.
 Bindless texture pages use the adapter's binding-array limit rather than its
@@ -1149,6 +1315,7 @@ exe before publishing; the local build also writes it to `version.txt`.
 |---|---|
 | `--title <text>` | Names the window "Aurora Viewer <version> - <text> (Dev)" and its log file |
 | `--fps-limit <fps>` | Caps this instance at 1–500 fps without changing saved preferences |
+| `--vr-mode=first-person\|avatar\|flycam` | Starting camera mode when used with `--vr` |
 | `--vr` | Enters VR once the world shows, with a headset connected (Windows and Linux) |
 | `--language <code>` | Forces the language of this instance (`en`, `fr`, `ja`, or another language added to the catalogues), without changing the saved choice |
 | `--grid <name>` | Selects the login grid: `agni`, `aditi`, a saved grid name/nickname or a login URI (`--loginuri <uri>` too) |
@@ -1244,10 +1411,7 @@ its own task in its own git worktree:
 - [docs/BRANDING.md](docs/BRANDING.md) — palette, logos, icons and UI rules
 - [docs/TESTING.md](docs/TESTING.md) — test switches (demo scenarios,
   captures, diagnostics) and profiling
-- [docs/HAND_CONTACTS.md](docs/HAND_CONTACTS.md) — local motorcycle wrist
-  contact prototype and the creator's LSL script
-- [docs/IK_EDIT.md](docs/IK_EDIT.md) — frozen-pose skeleton editor, target-prim
-  offsets and general bone-contact authoring for LSL
+- [docs/IK_EDIT.md](docs/IK_EDIT.md) — frozen-pose skeleton editor
 
 Pull requests follow the [pull request template](.github/pull_request_template.md):
 a check lists what a description is missing, and maintainers review a PR
@@ -1286,6 +1450,11 @@ openly.
 
 Questions and answers, and the details:
 [AI use policy](https://aurora-viewer.org/ai-policy/).
+
+## Security
+
+Found a vulnerability? Please report it privately, not in a public issue:
+[SECURITY.md](SECURITY.md) explains how, and what happens next.
 
 ## Privacy
 

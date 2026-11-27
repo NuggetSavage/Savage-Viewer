@@ -154,6 +154,8 @@ impl App {
             critical_required: false,
             bad_credentials: false,
             previous_session: true,
+            next_server: None,
+            unencrypted_server: None,
         });
         true
     }

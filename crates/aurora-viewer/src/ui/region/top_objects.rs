@@ -83,9 +83,10 @@ impl TopState {
     }
 }
 
-/// The window opens on `report`, asked as the Debug panel asks it.
-pub(super) fn open(s: &mut RegionUi, v: &View, world: &mut World, report: u32) {
-    s.top.open = true;
+/// The window opens on `report`, asked as the Debug panel asks it; shown
+/// again, a minimized one expands (LLFloaterReg::showInstance).
+pub(super) fn open(ctx: &egui::Context, s: &mut RegionUi, v: &View, world: &mut World, report: u32) {
+    widgets::open_floater(ctx, WINDOW, &mut s.top.open);
     s.top.report = report;
     s.top.selected.clear();
     s.top.sort = None;
@@ -143,7 +144,7 @@ pub(super) fn show(ctx: &egui::Context, p: &Palette, s: &mut RegionUi, v: &View,
     if world.estate.region.is_some()
         && let Some(report) = s.top.demo.take()
     {
-        open(s, v, world, report);
+        open(ctx, s, v, world, report);
     }
     if !s.top.open {
         return;
@@ -236,7 +237,7 @@ pub(super) fn show(ctx: &egui::Context, p: &Palette, s: &mut RegionUi, v: &View,
                     !waiting,
                 );
                 let w = ui.available_width().max(140.0);
-                let r = widgets::search_box(ui, p, &mut s.top.text, aurora_i18n::tr!("region-top-filter-hint"), w);
+                let r = widgets::clearable_search_box(ui, p, &mut s.top.text, aurora_i18n::tr!("region-top-filter-hint"), w);
                 let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
                 if filter.clicked() || enter && !waiting {
                     refresh(&mut s.top, v, world, true);
@@ -299,7 +300,7 @@ pub(super) fn show(ctx: &egui::Context, p: &Palette, s: &mut RegionUi, v: &View,
                 .clicked()
                     && let Some(id) = avatar
                 {
-                    crate::ui::profile::request_open(ui.ctx(), id);
+                    crate::ui::profile::request_open_in(ui.ctx(), crate::world::names::NameScope::Roster, id);
                 }
                 let kick_label = aurora_i18n::tr!("region-int-kick");
                 if widgets::action_button_if(
@@ -438,7 +439,8 @@ fn table(ui: &mut egui::Ui, p: &Palette, s: &mut TopState, rows: &[&TopObject], 
         x += w;
     }
     let height = ui.available_height();
-    egui::ScrollArea::vertical()
+    let selected_row = rows.iter().position(|o| s.selected.contains(&o.task_id));
+    widgets::search_scroll_to_row(ui, egui::ScrollArea::vertical(), selected_row, 26.0)
         .id_salt("region_top_objects_list")
         .max_height(height)
         .min_scrolled_height(height)

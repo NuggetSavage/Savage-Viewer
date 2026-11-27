@@ -14,6 +14,7 @@ mod draft;
 mod estate_wide;
 mod interventions;
 mod manage;
+mod opensim;
 mod overview;
 mod people;
 mod surface;
@@ -39,6 +40,11 @@ use uuid::Uuid;
 
 /// Id of the window (its place and size are kept by the layout).
 pub const WINDOW: &str = "region_estate";
+
+/// The Region / Estate window's floater id: the Legacy layout has its own.
+pub fn window_id(classic: bool) -> &'static str {
+    if classic { CLASSIC_WINDOW } else { WINDOW }
+}
 
 /// The three pages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -263,6 +269,12 @@ impl RegionUi {
         self.classic_tab = tab;
     }
 
+    /// AURORA_DEMO_REGION's `classic` holds: the window shows the Legacy
+    /// Viewer's tabs whatever the saved layout.
+    pub fn forced_classic(&self) -> bool {
+        self.force_classic
+    }
+
     /// AURORA_DEMO_REGION on People: a row ticked, a dialog or the picker.
     pub fn demo_people(&mut self, people: PeopleDemo) {
         self.people.demo = Some(people);
@@ -480,7 +492,14 @@ impl RegionUi {
             .or_else(|| info.as_ref().map(|i| i.owner))
             .unwrap_or_default();
         let manager = info.as_ref().is_some_and(|i| i.is_estate_manager);
-        let role = estate::role(world.agent_id, owner, manager);
+        // a god has the owner's whole window (LLPanelEstateInfo /
+        // LLPanelEstateAccess::updateControls: god || owner || manager, the
+        // terrain's and the managers' list owner_or_god); the region checks
+        let role = if world.god_level > 0 {
+            Role::Owner
+        } else {
+            estate::role(world.agent_id, owner, manager)
+        };
         View {
             handle,
             role,

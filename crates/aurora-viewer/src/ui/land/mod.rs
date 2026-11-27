@@ -187,6 +187,8 @@ struct View {
     handle: RegionHandle,
     region: Option<RegionView>,
     agent: Uuid,
+    /// We hold a god level: every parcel is ours to edit.
+    god: bool,
     groups: Vec<GroupMembership>,
     /// The selection is in the agent's region.
     same_region: bool,
@@ -211,6 +213,7 @@ impl View {
         AgentRights {
             id: self.agent,
             groups: &self.groups,
+            god: self.god,
         }
     }
 
@@ -263,6 +266,12 @@ enum PickFor {
     Access,
     Ban,
     SellTo,
+}
+
+/// The About Land window's floater id: each layout keeps its own place and
+/// size.
+pub fn window_id(classic: bool) -> &'static str {
+    if classic { "about_land" } else { "about_land_aurora" }
 }
 
 #[derive(Default)]
@@ -375,6 +384,7 @@ impl LandUi {
                 &AgentRights {
                     id: world.agent_id,
                     groups: &world.groups.groups,
+                    god: world.god_level > 0,
                 },
                 crate::world::land::powers::LAND_CHANGE_IDENTITY,
             )
@@ -515,6 +525,14 @@ impl LandUi {
             self.show_once = true;
             return;
         }
+        // "Visibility and search", unfolded (its name, description and
+        // picture rows; the demo parcel then has a long description)
+        if key == "visibility" {
+            self.page = Page::Manage;
+            self.manage_nav.go(manage::Section::Visibility);
+            self.manage_open.insert(manage::Section::Visibility);
+            return;
+        }
         if key == "owners" {
             self.page = Page::People;
             self.refresh_owners_once = true;
@@ -632,10 +650,11 @@ impl LandUi {
                 .get(&view.handle)
                 .is_some_and(|r| r.caps.contains_key("RegionExperiences"));
         // each layout keeps its own size
-        let (id, size, min_size) = if classic {
-            ("about_land", Vec2::new(790.0, 620.0), Vec2::new(740.0, 470.0))
+        let id = window_id(classic);
+        let (size, min_size) = if classic {
+            (Vec2::new(790.0, 620.0), Vec2::new(740.0, 470.0))
         } else {
-            ("about_land_aurora", aurora::SIZE, aurora::MIN_SIZE)
+            (aurora::SIZE, aurora::MIN_SIZE)
         };
         let mut floater = Floater::new(
             id,
@@ -743,7 +762,8 @@ impl LandUi {
             r.info.as_ref().map(|i| RegionView {
                 name: i.name.clone(),
                 owner: i.owner,
-                estate_manager: i.is_estate_manager,
+                // LLViewerRegion::canManageEstate counts a god
+                estate_manager: i.is_estate_manager || world.god_level > 0,
                 product: i.product_name.clone(),
                 sim_access: i.sim_access,
                 flags: i.region_flags,
@@ -756,6 +776,7 @@ impl LandUi {
             handle,
             region,
             agent: world.agent_id,
+            god: world.god_level > 0,
             groups: world.groups.groups.clone(),
             same_region: world.main_region == Some(handle),
             now: now_secs(),
@@ -951,14 +972,14 @@ fn dim(ui: &mut egui::Ui, p: &Palette, s: impl Into<String>) -> egui::Response {
 /// A resident's name that opens the profile (LLSLURL "agent ... inspect").
 fn agent_link(ui: &mut egui::Ui, p: &Palette, world: &mut World, id: Uuid) {
     world.social.want_name(id);
-    let name = world.social.name_of(&id);
+    let name = world.social.name_in(crate::world::names::NameScope::Roster, &id);
     if ui
         .add(egui::Label::new(RichText::new(name).size(12.0).color(p.violet_light)).sense(egui::Sense::click()))
         .on_hover_cursor(egui::CursorIcon::PointingHand)
         .on_hover_text(aurora_i18n::tr!("common-view-profile"))
         .clicked()
     {
-        super::profile::request_open(ui.ctx(), id);
+        super::profile::request_open_in(ui.ctx(), crate::world::names::NameScope::Roster, id);
     }
 }
 
@@ -1039,7 +1060,12 @@ fn maturity(ui: &mut egui::Ui, p: &Palette, v: &View) {
 /// rule, like the bars' clock): (year, month, day, weekday 0 = Sunday, hour,
 /// minute, second).
 pub(crate) fn slt_parts(secs: i64) -> (i64, usize, i64, usize, i64, i64, i64) {
-    let t = secs + crate::world::chat_log::format::pacific_offset_hours(secs) * 3600;
+    parts_at(secs, crate::world::chat_log::format::pacific_offset_hours(secs) * 3600)
+}
+
+/// The same parts at `offset` seconds from UTC (`clock::offset` of a zone).
+pub(crate) fn parts_at(secs: i64, offset: i64) -> (i64, usize, i64, usize, i64, i64, i64) {
+    let t = secs + offset;
     let days = t.div_euclid(86400);
     let tod = t.rem_euclid(86400);
     let (y, m, d) = aurora_net::profile::civil_from_days(days);

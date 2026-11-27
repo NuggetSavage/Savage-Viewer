@@ -145,6 +145,8 @@ pub enum Action {
     Remove(Uuid),
     Resume,
     ResumeFor(Choice),
+    /// The answer to a quick import's question (`quick`).
+    Quick(super::quick::Answer),
 }
 
 fn server_message(message: &str) -> &str {
@@ -284,6 +286,14 @@ fn mesh_blocked(imports: &Imports, connected: bool, account: Uuid) -> bool {
     connected && has_selected_mesh(imports) && imports.mesh_permission_denied && imports.mesh_permission_account == account
 }
 
+fn start_action(choice: Choice) -> Action {
+    if choice == Choice::Bulk {
+        Action::Start
+    } else {
+        Action::StartFor(choice)
+    }
+}
+
 fn price_label(imports: &Imports, prices: &Prices, connected: bool, account: Uuid) -> String {
     if imports.choice == Choice::Local {
         return aurora_i18n::tr!("import-local-free").into();
@@ -328,17 +338,12 @@ pub fn show(
     imports.sync_destinations(prefs, world, inventory_prefs);
     imports.reconcile_active();
     let prices = if imports.demo_started {
-        Prices {
-            texture: Some(10),
-            large_texture: Some(40),
-            sound: Some(10),
-            animation: Some(10),
-        }
+        imports.demo_prices()
     } else {
         world.login.as_ref().map(|login| Prices::from_login(&login.raw)).unwrap_or_default()
     };
     let prices = prices.with_fallback(world.upload_cost);
-    launcher::show(ctx, p, imports, &mut actions);
+    launcher::show(ctx, imports);
     inspector::show(ctx, p, imports, prefs, world, inventory_prefs, &prices, &mut actions);
     for choice in windows::TYPES {
         if imports.window_open(choice) {
@@ -368,7 +373,8 @@ pub fn show(
             let modal = widgets::Modal::new(egui::Id::unique("import_confirmation")).show(ctx, |ui| {
                 ui.set_width(380.0_f32.min(ctx.content_rect().width() - 60.0).max(180.0));
                 widgets::section_header(ui, p, "file-upload-filled", aurora_i18n::tr!("import-confirm-title"));
-                if let Some(cost) = imports.total(&prices) {
+                // A free upload only gets here for its folders: no price to confirm.
+                if let Some(cost) = imports.total(&prices).filter(|cost| *cost != 0) {
                     ui.label(aurora_i18n::tr!("import-confirm-price", cost = cost));
                     if imports.has_shared_textures() {
                         ui.label(aurora_i18n::tr!("import-confirm-shared-textures"));
@@ -384,11 +390,7 @@ pub fn show(
                     #[cfg(test)]
                     ctx.data_mut(|data| data.insert_temp(egui::Id::unique("import_confirm_upload"), start.rect));
                     if start.clicked() {
-                        actions.push(if choice == Choice::Bulk {
-                            Action::Start
-                        } else {
-                            Action::StartFor(choice)
-                        });
+                        actions.push(start_action(choice));
                         imports.confirm = false;
                     }
                     if action_button(ui, p, "x", aurora_i18n::tr!("common-cancel"), ActionKind::Flat, size).clicked() {
@@ -404,8 +406,101 @@ pub fn show(
             imports.confirm_choice = None;
         }
     }
+    quick_question(ctx, p, imports, prefs, world, &mut actions);
     zoom::show(ctx, p, imports, &mut actions);
     actions
+}
+
+/// A quick import's question (`quick::Ask`): its price, or its image size
+/// with both prices; closing it cancels.
+fn quick_question(
+    ctx: &egui::Context,
+    p: &Palette,
+    imports: &Imports,
+    prefs: &Preferences,
+    world: &crate::world::World,
+    actions: &mut Vec<Action>,
+) {
+    use super::quick::{Answer, Ask};
+    let Some((choice, ask)) = imports.quick.as_ref().and_then(|quick| Some((quick.choice, quick.ask?))) else {
+        return;
+    };
+    let affordable = |cost: i32| cost == 0 || world.balance.is_some_and(|balance| balance >= cost);
+    let mut answer = None;
+    let modal = widgets::Modal::new(egui::Id::unique("import_quick_question")).show(ctx, |ui| {
+        ui.set_width(380.0_f32.min(ctx.content_rect().width() - 60.0).max(180.0));
+        let title = match choice {
+            Choice::Material => aurora_i18n::tr!("toolbar-import-materials"),
+            Choice::Sound => aurora_i18n::tr!("toolbar-import-sounds"),
+            _ => aurora_i18n::tr!("toolbar-import-textures"),
+        };
+        widgets::section_header(ui, p, "file-upload-filled", title);
+        let size = Vec2::new(0.0, 26.0);
+        match ask {
+            Ask::Price { count, cost } => {
+                ui.label(match choice {
+                    Choice::Material => aurora_i18n::tr!("import-quick-materials", count = count, cost = cost),
+                    Choice::Sound => aurora_i18n::tr!("import-quick-sounds", count = count, cost = cost),
+                    _ => aurora_i18n::tr!("import-quick-textures", count = count, cost = cost),
+                });
+                let short = !affordable(cost);
+                if short {
+                    ui.label(RichText::new(aurora_i18n::tr!("import-insufficient-balance")).color(p.danger));
+                }
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    let ok = action_button_if(ui, p, "check", aurora_i18n::tr!("common-ok"), ActionKind::Primary, size, !short);
+                    #[cfg(test)]
+                    ctx.data_mut(|data| data.insert_temp(egui::Id::unique("import_quick_ok"), ok.rect));
+                    if ok.clicked() {
+                        answer = Some(Answer::Upload(None));
+                    }
+                    let cancel = action_button(ui, p, "x", aurora_i18n::tr!("common-cancel"), ActionKind::Flat, size);
+                    #[cfg(test)]
+                    ctx.data_mut(|data| data.insert_temp(egui::Id::unique("import_quick_cancel"), cancel.rect));
+                    if cancel.clicked() {
+                        answer = Some(Answer::Cancel);
+                    }
+                });
+            }
+            Ask::Size { count, small, large } => {
+                ui.label(match choice {
+                    Choice::Material => aurora_i18n::tr!("import-quick-materials-size", count = count),
+                    _ => aurora_i18n::tr!("import-quick-textures-size", count = count),
+                });
+                if !affordable(small) {
+                    ui.label(RichText::new(aurora_i18n::tr!("import-insufficient-balance")).color(p.danger));
+                }
+                ui.add_space(4.0);
+                ui.horizontal_wrapped(|ui| {
+                    // the shared size limit's choice is the main one
+                    for (big, pixels, cost) in [(false, 1024, small), (true, 2048, large)] {
+                        let kind = if big != prefs.limit_texture_size {
+                            ActionKind::Primary
+                        } else {
+                            ActionKind::Flat
+                        };
+                        let label = aurora_i18n::tr!("import-quick-size-choice", size = pixels, cost = cost);
+                        let button = action_button_if(ui, p, "photo-filled", &label, kind, size, affordable(cost));
+                        #[cfg(test)]
+                        ctx.data_mut(|data| data.insert_temp(egui::Id::unique(("import_quick_size", big)), button.rect));
+                        if button.clicked() {
+                            answer = Some(Answer::Upload(Some(big)));
+                        }
+                    }
+                    if action_button(ui, p, "x", aurora_i18n::tr!("common-cancel"), ActionKind::Flat, size).clicked() {
+                        answer = Some(Answer::Cancel);
+                    }
+                });
+            }
+        }
+    });
+    if answer.is_none() && modal.should_close() {
+        answer = Some(Answer::Cancel);
+    }
+    if let Some(answer) = answer {
+        actions.push(Action::Quick(answer));
+    }
 }
 
 fn lod_label(level: usize) -> &'static str {
@@ -531,6 +626,44 @@ fn linear_color(color: [f32; 4]) -> [f32; 4] {
     // The egui preview target stores gamma RGB. PBR factors use linear RGB.
     egui::Rgba::from(color32(color)).to_rgba_unmultiplied()
 }
+fn image_size_limit(ui: &mut egui::Ui, entry: &mut Entry, prefs: &Preferences) {
+    let old = entry.image_size_limit;
+    ui.horizontal_wrapped(|ui| {
+        ui.label(if matches!(entry.source, Some(Source::Texture(_))) {
+            aurora_i18n::tr!("import-image-size-single")
+        } else {
+            aurora_i18n::tr!("import-image-size-limit")
+        });
+        let label = |limit| match limit {
+            ImageSizeLimit::Default => aurora_i18n::tr!("import-image-size-inherit", size = limit.maximum(prefs.limit_texture_size)),
+            limit => aurora_i18n::tr!("import-image-size-pixels", size = limit.maximum(prefs.limit_texture_size)),
+        };
+        let response = egui::ComboBox::from_id_salt(("import_image_size_limit", entry.id))
+            .width(210.0)
+            .selected_text(label(entry.image_size_limit))
+            .show_ui(ui, |ui| {
+                for limit in [ImageSizeLimit::Default, ImageSizeLimit::Size1024, ImageSizeLimit::Size2048] {
+                    let response = selection(ui, &mut entry.image_size_limit, limit, label(limit));
+                    #[cfg(test)]
+                    ui.ctx().data_mut(|data| {
+                        data.insert_temp(egui::Id::unique(("import_image_size_choice", entry.id, limit)), response.rect);
+                    });
+                    let _ = response;
+                }
+            })
+            .response
+            .on_hover_text(aurora_i18n::tr!("import-image-size-inherit-help"));
+        #[cfg(test)]
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(egui::Id::unique(("import_image_size_limit", entry.id)), response.rect);
+        });
+        let _ = response;
+    });
+    if old != entry.image_size_limit {
+        entry.sync_image_size(prefs.limit_texture_size);
+    }
+}
+
 fn texture(
     ui: &mut egui::Ui,
     p: &Palette,
@@ -538,7 +671,6 @@ fn texture(
     image: &DecodedImage,
     empty_alpha: bool,
     options: &mut import_texture::Options,
-    prefs: &mut Preferences,
     preview: &Option<egui::TextureHandle>,
     actions: &mut Vec<Action>,
     generation: &mut u64,
@@ -568,15 +700,6 @@ fn texture(
                 selection(ui, target, index, label);
             }
         });
-    if texture_needs_size_limit(image) {
-        let mut limit_size = options.max_width.max(options.max_height) <= 1024;
-        if widgets::switch_labeled(ui, p, &mut limit_size, aurora_i18n::tr!("import-max-size")).changed() {
-            let maximum = if limit_size { 1024 } else { 2048 };
-            options.max_width = maximum;
-            options.max_height = maximum;
-            prefs.limit_texture_size = limit_size;
-        }
-    }
     let (width, height) = import_texture::dimensions(image.width, image.height, *options);
     ui.label(aurora_i18n::tr!("import-texture-size", width = width, height = height));
     if width * height <= 128 * 128 {
@@ -822,25 +945,30 @@ fn animation_controls(ui: &mut egui::Ui, p: &Palette, animation: &mut Animation,
         .small()
         .color(p.muted),
     );
-    let Some(bvh) = bvh else {
-        return;
-    };
-    ui.label(
-        RichText::new(aurora_i18n::tr!(
-            "import-animation-frames",
-            frames = bvh.frames,
-            rate = format!("{:.2}", if bvh.frame_time > 0.0 { 1.0 / bvh.frame_time } else { 0.0 })
-        ))
-        .small()
-        .color(p.muted),
-    );
+    if let Some(bvh) = bvh {
+        ui.label(
+            RichText::new(aurora_i18n::tr!(
+                "import-animation-frames",
+                frames = bvh.frames,
+                rate = format!("{:.2}", if bvh.frame_time > 0.0 { 1.0 / bvh.frame_time } else { 0.0 })
+            ))
+            .small()
+            .color(p.muted),
+        );
+    }
     ui.add_space(12.0);
     egui::Grid::new("animation_identity")
         .num_columns(2)
         .spacing(Vec2::new(12.0, 8.0))
         .show(ui, |ui| {
             ui.label(aurora_i18n::tr!("import-priority"));
-            ui.add(egui::DragValue::new(&mut animation.base_priority).range(0..=6));
+            egui::ComboBox::from_id_salt("animation_priority")
+                .selected_text(animation.base_priority.to_string())
+                .show_ui(ui, |ui| {
+                    for priority in 0..=6 {
+                        selection(ui, &mut animation.base_priority, priority, priority.to_string());
+                    }
+                });
             ui.end_row();
             ui.label(aurora_i18n::tr!("import-animation-hands"));
             let hands = super::animation::hands();
@@ -875,13 +1003,15 @@ fn animation_controls(ui: &mut egui::Ui, p: &Palette, animation: &mut Animation,
     checkbox(ui, p, &mut animation.looping, aurora_i18n::tr!("import-loop"));
     ui.add_enabled_ui(animation.looping, |ui| {
         egui::Grid::new("animation_loop")
-            .num_columns(4)
+            .num_columns(if bvh.is_some() { 4 } else { 3 })
             .spacing(Vec2::new(10.0, 8.0))
             .show(ui, |ui| {
                 ui.label("");
                 ui.label(RichText::new(aurora_i18n::tr!("import-animation-seconds")).small().color(p.muted));
                 ui.label(RichText::new("%").small().color(p.muted));
-                ui.label(RichText::new(aurora_i18n::tr!("import-animation-frame")).small().color(p.muted));
+                if bvh.is_some() {
+                    ui.label(RichText::new(aurora_i18n::tr!("import-animation-frame")).small().color(p.muted));
+                }
                 ui.end_row();
                 for (label, value) in [
                     (aurora_i18n::tr!("import-loop-in"), &mut animation.loop_in),
@@ -892,7 +1022,7 @@ fn animation_controls(ui: &mut egui::Ui, p: &Palette, animation: &mut Animation,
                         Vec2::new(64.0, 26.0),
                         egui::DragValue::new(value)
                             .range(0.0..=animation.duration)
-                            .speed(bvh.frame_time)
+                            .speed(bvh.map_or(0.01, |info| info.frame_time))
                             .fixed_decimals(3),
                     );
                     let mut percent = if animation.duration > 0.0 {
@@ -909,19 +1039,21 @@ fn animation_controls(ui: &mut egui::Ui, p: &Palette, animation: &mut Animation,
                     {
                         *value = percent / 100.0 * animation.duration;
                     }
-                    let mut frame = if bvh.frame_time > 0.0 {
-                        (*value / bvh.frame_time).round() as usize
-                    } else {
-                        0
-                    };
-                    if ui
-                        .add_sized(
-                            Vec2::new(52.0, 26.0),
-                            egui::DragValue::new(&mut frame).range(0..=bvh.frames.saturating_sub(2)),
-                        )
-                        .changed()
-                    {
-                        *value = frame as f32 * bvh.frame_time;
+                    if let Some(bvh) = bvh {
+                        let mut frame = if bvh.frame_time > 0.0 {
+                            (*value / bvh.frame_time).round() as usize
+                        } else {
+                            0
+                        };
+                        if ui
+                            .add_sized(
+                                Vec2::new(52.0, 26.0),
+                                egui::DragValue::new(&mut frame).range(0..=bvh.frames.saturating_sub(2)),
+                            )
+                            .changed()
+                        {
+                            *value = frame as f32 * bvh.frame_time;
+                        }
                     }
                     ui.end_row();
                 }
@@ -940,7 +1072,14 @@ fn animation_controls(ui: &mut egui::Ui, p: &Palette, animation: &mut Animation,
                 ui.label(label);
                 ui.add(
                     egui::DragValue::new(value)
-                        .range(0.0..=animation.duration)
+                        .range(
+                            0.0..=if animation.looping {
+                                super::animation::MAX_LOOP_FADE_INPUT
+                            } else {
+                                animation.duration
+                            },
+                        )
+                        .clamp_existing_to_range(!animation.looping)
                         .suffix(" s")
                         .speed(0.01)
                         .fixed_decimals(3),

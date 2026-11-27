@@ -477,7 +477,7 @@ pub fn menu_body(ui: &mut egui::Ui, p: &Palette, icons: &Icons, view: &View, out
         ui.horizontal(|ui| {
             ui.add_space(2.0);
             let w = ui.available_width() - 2.0;
-            crate::ui::widgets::pills::search_box(ui, p, &mut filter, aurora_i18n::tr!("favorites-filter"), w);
+            crate::ui::widgets::clearable_search_box(ui, p, &mut filter, aurora_i18n::tr!("favorites-filter"), w);
         });
         ui.add_space(6.0);
         let rows = filtered(view, &filter);
@@ -588,10 +588,18 @@ fn pill_width(ui: &egui::Ui, fav: &Favorite) -> f32 {
 /// rectangle.
 pub fn row(ctx: &egui::Context, p: &Palette, icons: &Icons, view: &View, under: Rect) -> (Rect, Option<BarAction>) {
     let mut out = None;
+    let editing = crate::ui::toolbar::ToolbarUi::intercepting(ctx);
+    // A moved navigation block keeps its favourites inside the viewport.
+    let (anchor, above, _) = crate::ui::widgets::popup_vertical(ctx.content_rect(), under, ROW_HEIGHT, super::islands::MARGIN);
+    let top = if above { anchor - ROW_HEIGHT } else { anchor };
+    let bounds = row_bounds(under, view.folded);
+    let rect = bounds.translate(Vec2::new(0.0, top - bounds.top()));
     if view.folded {
         // a tab under the place island's left end
-        let rect = row_bounds(under, true);
         area(ctx, p, "favorites_tab", rect, |ui| {
+            if editing {
+                crate::ui::toolbar::edit_mode::preview(ui);
+            }
             let slot = rect.shrink2(Vec2::new(PAD, (ROW_HEIGHT - PILL_H) / 2.0));
             let resp = ui.interact(slot, Id::unique("bars_favorites_unfold"), Sense::click());
             slot_face(ui, p, slot, resp.hovered(), false);
@@ -607,8 +615,10 @@ pub fn row(ctx: &egui::Context, p: &Palette, icons: &Icons, view: &View, under: 
         });
         return (rect, out.map(BarAction::from));
     }
-    let rect = row_bounds(under, false);
     area(ctx, p, "favorites_row", rect, |ui| {
+        if editing {
+            crate::ui::toolbar::edit_mode::preview(ui);
+        }
         mark_shown(ui.ctx());
         let back = ui.interact(rect, Id::unique("bars_favorites_row_back"), Sense::click());
         row_menu(&back, p, view, &mut out);

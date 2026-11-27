@@ -61,6 +61,10 @@ impl Messages {
             kind: super::ChatKind::Object(message.chat_type),
             source: message.source_id,
             origin: super::Origin::Live,
+            blocked: false,
+            beyond_range: false,
+            speaker: Default::default(),
+            private_history: false,
         });
         let error = message.chat_type == ChatType::Debug;
         if error && let Some(channel) = self.channel {
@@ -102,6 +106,7 @@ mod tests {
             owner_id: owner,
             source_type: ChatSourceType::Object,
             chat_type,
+            region: None,
             position: glam::Vec3::ZERO,
             message: "hello".into(),
         }

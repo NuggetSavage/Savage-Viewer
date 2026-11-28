@@ -5,6 +5,23 @@ bar and in About. Each version below names its commit on GitHub (branch
 `savage`), which is the exact code of that version, and the build keeps a
 copy of each viewer in `C:\dev\savage-viewer-app\versions`.
 
+## 0.5.1 (2026-11-27)
+
+Commit: the one titled "Version 0.5.1" on GitHub.
+
+Fixed
+- Rain after updating. 0.5.0 turned the new weather on (rain at full
+  strength, with wind) for every settings file from before it. An update
+  no longer does, and a file 0.5.0 left exactly that way is put back to
+  off once. Weather you changed yourself is kept.
+- The viewer no longer counts as "in the background" while it is the
+  window in front on the desktop but something else holds the keyboard,
+  such as the menu of GShade or ReShade. In the background it limits
+  itself to 15 frames a second. The log now says when this happens.
+
+Not yet seen working on a PC. Whether the second fix is the whole cause of
+the slow GShade menu is not proven: the log line will tell.
+
 ## 0.5.0 (2026-11-26)
 
 Commit: the one titled "Version 0.5.0" on GitHub.

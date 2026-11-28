@@ -21,7 +21,9 @@ impl App {
     /// The viewer is in front: one of its windows has the focus, its own
     /// or one outside (`outside::in_front`).
     pub(super) fn in_front(&self) -> bool {
-        crate::outside::in_front(self.focused, self.outside.focused())
+        // (Savage Viewer) or it is the window in front on the desktop
+        // without the keys (`App::foreground`)
+        crate::outside::in_front(self.focused || self.foreground, self.outside.focused())
     }
 
     /// Before the interface's pass: what the render thread answered, the

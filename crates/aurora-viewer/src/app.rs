@@ -885,6 +885,13 @@ pub struct App {
     screen_rate: crate::screen_rate::ScreenRate,
     /// The window has the keyboard focus (background frame cap).
     focused: bool,
+    /// (Savage Viewer) The viewer's window is the one in front on the
+    /// desktop, read each frame (`outside::foreground`): an overlay's menu
+    /// (GShade, ReShade) can take the keyboard focus from it while it stays
+    /// in front, and the viewer is not behind then.
+    foreground: bool,
+    /// The log said so (once a change).
+    foreground_noted: bool,
     /// Autotune while it runs or holds its values (app/autotune.rs).
     autotune: autotune::State,
     /// Loading / teleport screen background (last view, blurred).
@@ -2238,6 +2245,8 @@ impl App {
             named_teleport: Default::default(),
             screen_rate: Default::default(),
             focused: true,
+            foreground: false,
+            foreground_noted: false,
             autotune: Default::default(),
             backdrop,
             want_scene_capture: false,
@@ -14543,6 +14552,17 @@ impl App {
         // window is on now (it may have moved, the screen may have changed
         // its mode)
         self.screen_rate.poll(&gfx.window, Instant::now());
+        // (Savage Viewer) in front on the desktop, whoever has the keys
+        self.foreground = crate::outside::foreground(&gfx.window);
+        let without_keys = self.foreground && !self.focused;
+        if without_keys != self.foreground_noted {
+            self.foreground_noted = without_keys;
+            if without_keys {
+                log::info!("focus: the window is in front without the keyboard focus (an overlay's menu?): it counts as in front");
+            } else {
+                log::info!("focus: the window has the keyboard focus again, or is behind");
+            }
+        }
         let monitor_hz = self.screen_rate.hz();
         let timed = self.capture.is_some() || self.frame_profile.enabled();
         let cap = frame_cap(

@@ -777,6 +777,9 @@ pub struct Settings {
     /// EnvironmentPersistAcrossLogin, on).
     pub env_persist: bool,
     /// The weather of this viewer (the Environment window's "Weather").
+    /// (Savage Viewer: read through `weather::from_file`, which tells a
+    /// file's weather from the defaults of a file that has none.)
+    #[serde(deserialize_with = "crate::weather::from_file")]
     pub weather: crate::weather::WeatherSettings,
     /// Sky, water and day cycle lists A–Z instead of the inventory's order
     /// (an Aurora switch on the lists, off: the order since #812; the
@@ -3828,10 +3831,18 @@ impl Settings {
             // Aurora Weather's main and card switches, off by default: an
             // earlier file keeps on what it drew (none of its own where
             // regions set the weather)
-            self.weather.upgrade_to_switches();
+            // (Savage Viewer) a file with no weather at all drew none: the
+            // defaults stay off. Upgraded as a file's, their full strength
+            // read as rain and wind left on (0.5.0).
+            if self.weather.from_file {
+                self.weather.upgrade_to_switches();
+            }
         }
         // only the migration above reads the former region switch
         self.weather.former_region_weather = None;
+        self.weather.from_file = false;
+        // (Savage Viewer) and the files 0.5.0 already upgraded so
+        self.weather.undo_upgrade_mistake();
         if self.settings_version < 44 {
             // the wind's defaults, a breeze: a wind off and left still
             // takes them, so that switching it on blows
@@ -6048,6 +6059,27 @@ mod tests {
         assert!(!loaded.inventory.recent_sort.system_first);
         assert_eq!(loaded.inventory.sort, Settings::default().inventory.sort);
         assert_eq!(loaded.inventory.received_sort, Settings::default().inventory.received_sort);
+    }
+
+    /// (Savage Viewer) A file from before the weather existed has none to
+    /// keep on: no rain after the upgrade. And the file 0.5.0 upgraded
+    /// that way is put right.
+    #[test]
+    fn a_file_without_weather_stays_dry() {
+        let read = |file: serde_json::Value| serde_json::from_value::<Settings>(file).expect("read settings").sanitized();
+        for version in [0, 35, 42] {
+            let old = read(serde_json::json!({ "settings_version": version }));
+            assert!(
+                !old.weather.enabled && !old.weather.precipitation_on && !old.weather.wind_on,
+                "version {version}"
+            );
+        }
+        let mistaken = serde_json::json!({ "enabled": true, "precipitation_on": true, "wind_on": true });
+        let fixed = read(serde_json::json!({ "settings_version": SETTINGS_VERSION, "weather": mistaken }));
+        assert!(!fixed.weather.enabled && !fixed.weather.precipitation_on && !fixed.weather.wind_on);
+        // read back, it is the same settings again
+        let again = read(serde_json::to_value(&fixed).expect("serialize"));
+        assert_eq!(again.weather, fixed.weather);
     }
 
     /// A file from before Aurora Weather's switches turns on only the

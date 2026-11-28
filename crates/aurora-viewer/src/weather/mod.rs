@@ -148,6 +148,29 @@ pub struct WeatherSettings {
     /// of these settings was drawn.
     #[serde(rename = "region_weather", skip_serializing)]
     pub(crate) former_region_weather: Option<bool>,
+    /// (Savage Viewer) These settings were read from a file, not made up
+    /// for a file that had none (`from_file`): only then does
+    /// `upgrade_to_switches` have something to keep on. Set back once the
+    /// file is upgraded.
+    #[serde(skip)]
+    pub(crate) from_file: bool,
+    /// (Savage Viewer) `undo_upgrade_mistake` has looked at this file. A
+    /// file without the line was written before the check existed.
+    #[serde(default = "not_checked")]
+    pub(crate) savage_checked: bool,
+}
+
+fn not_checked() -> bool {
+    false
+}
+
+/// (Savage Viewer) The weather of a settings file that holds one
+/// (`Settings::weather`): a file without one keeps the defaults, all off,
+/// and is not upgraded as if it had drawn them.
+pub(crate) fn from_file<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<WeatherSettings, D::Error> {
+    let mut weather = WeatherSettings::deserialize(deserializer)?;
+    weather.from_file = true;
+    Ok(weather)
 }
 
 impl Default for WeatherSettings {
@@ -186,6 +209,8 @@ impl Default for WeatherSettings {
             quality: WeatherQuality::High,
             touched: false,
             former_region_weather: None,
+            from_file: false,
+            savage_checked: true,
         }
     }
 }
@@ -244,6 +269,30 @@ impl WeatherSettings {
         self.enabled = !regions_set_it && (self.precipitation_on || self.wind_on || self.aurora);
         if self.amount <= 0.0 {
             self.amount = 1.0;
+        }
+    }
+
+    /// (Savage Viewer) Once per file: 0.5.0 upgraded a file that had no
+    /// weather at all as if it had drawn today's defaults, and turned on
+    /// rain at full strength with a breeze. A file left exactly so goes
+    /// back to off; anything changed since is the user's and stays.
+    pub fn undo_upgrade_mistake(&mut self) {
+        if std::mem::replace(&mut self.savage_checked, true) {
+            return;
+        }
+        let as_upgraded = self.enabled
+            && self.precipitation_on
+            && self.wind_on
+            && self.precipitation == Precipitation::Rain
+            && self.amount == 1.0
+            && self.wind_min == WIND_MIN_DEFAULT
+            && self.wind_max == WIND_MAX_DEFAULT
+            && !self.thunder
+            && !self.aurora;
+        if as_upgraded {
+            self.enabled = false;
+            self.precipitation_on = false;
+            self.wind_on = false;
         }
     }
 
@@ -890,6 +939,30 @@ mod tests {
         // "Let regions set the weather" off: its own weather was drawn
         let own = read("{\"amount\": 0.4, \"wind_max\": 0.3, \"aurora\": true, \"region_weather\": false}");
         assert!(own.enabled && own.precipitation_on && own.wind_on);
+    }
+
+    /// (Savage Viewer) 0.5.0's mistake is undone once, and only where the
+    /// file is exactly what the mistake left.
+    #[test]
+    fn the_rain_an_upgrade_turned_on_is_turned_off_once() {
+        let mistaken = "{\"enabled\": true, \"precipitation_on\": true, \"wind_on\": true}";
+        let mut w: WeatherSettings = serde_json::from_str(mistaken).expect("parse");
+        assert!(!w.savage_checked);
+        w.undo_upgrade_mistake();
+        assert!(!w.enabled && !w.precipitation_on && !w.wind_on && w.savage_checked);
+        // switched on again by the user: it stays
+        w.enabled = true;
+        w.precipitation_on = true;
+        w.wind_on = true;
+        w.undo_upgrade_mistake();
+        assert!(w.enabled && w.precipitation_on && w.wind_on);
+        // a weather the user set differently is theirs
+        let mut snow: WeatherSettings =
+            serde_json::from_str("{\"enabled\": true, \"precipitation_on\": true, \"wind_on\": true, \"amount\": 0.4}").expect("parse");
+        snow.undo_upgrade_mistake();
+        assert!(snow.enabled && snow.precipitation_on);
+        // a new file is never looked at
+        assert!(WeatherSettings::default().savage_checked);
     }
 
     #[test]

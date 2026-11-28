@@ -89,6 +89,32 @@ pub(crate) fn in_front(own_window: bool, window_outside: bool) -> bool {
     own_window || window_outside
 }
 
+/// (Savage Viewer) The window is the one in front on the desktop
+/// (GetForegroundWindow), whether or not it has the keyboard focus: the
+/// menu of an overlay drawn in it (GShade, ReShade) can take the focus
+/// while the window stays in front. Windows only; elsewhere the focus
+/// alone says.
+#[cfg(windows)]
+pub(crate) fn foreground(window: &winit::window::Window) -> bool {
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+    use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let Ok(handle) = window.window_handle() else {
+        return false;
+    };
+    let RawWindowHandle::Win32(handle) = handle.as_raw() else {
+        return false;
+    };
+    // SAFETY: GetForegroundWindow takes no argument and returns a handle
+    // (or null) that is only compared, never used.
+    let front = unsafe { GetForegroundWindow() };
+    !front.is_null() && front as isize == handle.hwnd.get()
+}
+
+#[cfg(not(windows))]
+pub(crate) fn foreground(_window: &winit::window::Window) -> bool {
+    false
+}
+
 /// A window of the interface asks for its window outside.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Ask {
